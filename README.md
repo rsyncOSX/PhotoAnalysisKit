@@ -70,6 +70,36 @@ The host application remains responsible for decoding or demosaicing a source
 file into a `CGImage`. This keeps camera-vendor behavior and security-scoped URL
 handling outside the analysis package.
 
+## Batch analysis
+
+PhotoAnalysisKit can coordinate bounded concurrent analysis without taking
+ownership of file decoding. Each request supplies an asynchronous input provider,
+so hosts retain their RAW/JPEG loading policy:
+
+```swift
+let requests = files.map { file in
+    PhotoAnalysisBatchRequest(id: file.id) {
+        guard let image = await decode(file.url) else { return nil }
+        return PhotoAnalysisInput(
+            image: image,
+            iso: file.iso,
+            aperture: file.aperture
+        )
+    }
+}
+
+let results = await analyzer.analyzeBatch(
+    requests,
+    maximumConcurrentTasks: 4
+) { progress in
+    print("\(progress.completedCount)/\(progress.totalCount)")
+}
+```
+
+The returned array preserves request order even though progress is reported in
+completion order. A `nil` return means the parent task was cancelled; individual
+decode failures remain represented by a batch result whose `analysis` is `nil`.
+
 ## Vision feature prints
 
 ```swift

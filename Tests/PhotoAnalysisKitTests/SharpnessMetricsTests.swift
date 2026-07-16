@@ -44,6 +44,14 @@ struct SharpnessMetricsTests {
         #expect(abs(SharpnessMetrics.microContrast(samples) - 0.5) < 0.01)
     }
 
+    @Test("Micro-contrast ignores non-finite samples")
+    func microContrastIgnoresNonFiniteSamples() {
+        var samples = [Float](repeating: 0.5, count: 100)
+        samples.append(.nan)
+        samples.append(.infinity)
+        #expect(SharpnessMetrics.microContrast(samples) < 1e-5)
+    }
+
     @Test(
         "ISO scaling follows the stable curve",
         arguments: [
@@ -58,6 +66,21 @@ struct SharpnessMetricsTests {
     )
     func isoScaling(iso: Int, expected: Float) {
         #expect(abs(SharpnessMetrics.isoScalingFactor(iso: iso) - expected) < 1e-4)
+    }
+
+    @Test("ISO scaling is monotonic and remains below the legacy curve")
+    func isoScalingPolicy() {
+        let isoValues = [
+            100, 200, 400, 800, 1_600, 2_000, 3_200, 6_400, 12_800, 25_600,
+        ]
+        let factors = isoValues.map {
+            SharpnessMetrics.isoScalingFactor(iso: $0)
+        }
+
+        for index in 1 ..< factors.count {
+            #expect(factors[index] >= factors[index - 1])
+        }
+        #expect(SharpnessMetrics.isoScalingFactor(iso: 6_400) < 2)
     }
 
     @Test(
@@ -99,6 +122,27 @@ struct SharpnessConfigurationTests {
     )
     func apertureHint(aperture: Double?, expected: SharpnessConfiguration.ApertureHint) {
         #expect(.from(aperture: aperture) == expected)
+    }
+
+    @Test("Aperture hints preserve blur-gate and weighting policy")
+    func aperturePolicy() {
+        let hints = [
+            SharpnessConfiguration.ApertureHint.wide,
+            .mid,
+            .landscape,
+        ]
+        for hint in hints {
+            #expect(hint.blurGateHigh > hint.blurGateLow)
+        }
+
+        #expect(SharpnessConfiguration.ApertureHint.landscape.blurGateLow
+            < SharpnessConfiguration.ApertureHint.mid.blurGateLow)
+        #expect(SharpnessConfiguration.ApertureHint.mid.blurGateLow
+            < SharpnessConfiguration.ApertureHint.wide.blurGateLow)
+        #expect(SharpnessConfiguration.ApertureHint.wide.salientWeightOverride == nil)
+        #expect(SharpnessConfiguration.ApertureHint.mid.salientWeightOverride == nil)
+        #expect(SharpnessConfiguration.ApertureHint.landscape.salientWeightOverride == 0.55)
+        #expect(SharpnessConfiguration.ApertureHint.landscape.blurDamp == 0.8)
     }
 
     @Test("Presets preserve their scoring emphasis")
