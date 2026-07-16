@@ -16,6 +16,9 @@ let package = Package(
     targets: [
         .target(
             name: "PhotoAnalysisKit",
+            exclude: [
+                "Resources/Kernels.ci.metal"
+            ],
             resources: [
                 .process("Resources")
             ],
