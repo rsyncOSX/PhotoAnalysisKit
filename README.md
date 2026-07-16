@@ -40,6 +40,32 @@ let result = await analyzer.analyze(input)
 print(result.breakdown?.finalScore as Any)
 ```
 
+## Sharpness configuration and cache identity
+
+PhotoAnalysisKit owns the numeric tuning applied by `SharpnessPreset` and
+`SharpnessQuality`. Hosts may keep their own persisted or presentation enums,
+but should map them to these package values instead of duplicating the tuning
+constants.
+
+Hosts that persist sharpness results can use the package-owned descriptor:
+
+```swift
+let configuration = SharpnessQuality.balanced.applying(
+    to: SharpnessPreset.birdsAndWildlife.applying(
+        to: .birdsInFlight
+    )
+)
+let descriptor = PhotoAnalyzer.sharpnessDescriptor(
+    for: configuration
+)
+```
+
+`SharpnessAnalysisDescriptor` contains the package algorithm and policy
+versions plus every host-configurable value that affects non-mask sharpness
+analysis output. Per-image ISO and aperture remain part of `PhotoAnalysisInput`.
+Applications should layer source-selection, decoded-image size, and source-file
+identity around this descriptor when building their cache keys.
+
 The host application remains responsible for decoding or demosaicing a source
 file into a `CGImage`. This keeps camera-vendor behavior and security-scoped URL
 handling outside the analysis package.

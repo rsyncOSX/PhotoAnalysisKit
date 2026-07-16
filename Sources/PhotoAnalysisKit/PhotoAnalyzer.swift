@@ -14,6 +14,15 @@ public struct PhotoAnalyzer: @unchecked Sendable {
         self.engine = FocusMaskEngine()
     }
 
+    /// Returns the package-owned identity for non-mask analysis results produced
+    /// with `configuration`. Hosts can layer input-source and file identity on
+    /// top of this value when persisting analysis results.
+    public nonisolated static func sharpnessDescriptor(
+        for configuration: SharpnessConfiguration
+    ) -> SharpnessAnalysisDescriptor {
+        SharpnessAnalysisDescriptor(configuration: configuration)
+    }
+
     /// Computes scalar sharpness, saliency/classification, and detailed focus
     /// evidence without rendering an overlay.
     public func analyze(
