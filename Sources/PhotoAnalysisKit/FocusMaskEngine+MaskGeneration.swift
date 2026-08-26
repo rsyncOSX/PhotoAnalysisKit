@@ -1,4 +1,3 @@
-import Accelerate
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
@@ -418,17 +417,37 @@ extension FocusMaskEngine {
         floorMultiplier: Float,
         capAtFallback: Bool,
     ) -> Float {
+        adaptiveVisualThreshold(
+            sortedSamples: sortedForOrderStatistics(samples),
+            fallback: fallback,
+            percentile: percentile,
+            floorMultiplier: floorMultiplier,
+            capAtFallback: capAtFallback,
+        )
+    }
+
+    nonisolated static func adaptiveVisualThreshold(
+        sortedSamples: [Float],
+        fallback: Float,
+        percentile: Float,
+        floorMultiplier: Float,
+        capAtFallback: Bool,
+    ) -> Float {
         let floor = max(fallback * floorMultiplier, 0.01)
-        let finite = samples.filter { $0.isFinite && $0 > 0 }
+        var finite = sortedSamples.filter { $0.isFinite && $0 > 0 }
         guard !finite.isEmpty else {
             return min(floor, 0.95)
         }
+        // Filtering zeros and negative finite values preserves order. NaN and
+        // infinities do not have a total ordering, so restore the standalone
+        // helper's filter-then-sort behavior for malformed sample buffers.
+        if sortedSamples.contains(where: { !$0.isFinite }) {
+            finite = sortedForOrderStatistics(finite)
+        }
 
-        var sorted = finite
-        vDSP.sort(&sorted, sortOrder: .ascending)
         let p = min(max(percentile, 0), 1)
-        let index = min(max(Int(Float(sorted.count - 1) * p), 0), sorted.count - 1)
-        let adaptive = capAtFallback ? min(sorted[index], fallback) : sorted[index]
+        let index = min(max(Int(Float(finite.count - 1) * p), 0), finite.count - 1)
+        let adaptive = capAtFallback ? min(finite[index], fallback) : finite[index]
         return min(max(adaptive, floor), 0.95)
     }
 
@@ -558,10 +577,11 @@ extension FocusMaskEngine {
     ) -> FocusPatchRanking {
         let grid = redSampleGrid(in: rect, from: sourceImage, context: context)
         let samples = grid.samples
-        let robust = robustTailScore(samples) ?? 0
+        let sortedSamples = sortedForOrderStatistics(samples)
+        let robust = robustTailScore(samples, sortedSamples: sortedSamples) ?? 0
         let micro = microContrast(samples)
         let threshold = adaptiveVisualThreshold(
-            samples,
+            sortedSamples: sortedSamples,
             fallback: 0.46,
             percentile: 0.88,
             floorMultiplier: 0.32,

@@ -1,5 +1,5 @@
 import Foundation
-import PhotoAnalysisKit
+@testable import PhotoAnalysisKit
 import Testing
 
 @Suite("Sharpness numeric metrics")
@@ -36,6 +36,48 @@ struct SharpnessMetricsTests {
         let first = try #require(SharpnessMetrics.robustTailScore(base))
         let second = try #require(SharpnessMetrics.robustTailScore(scaled))
         #expect(abs(second / first - 10) < 0.1)
+    }
+
+    @Test("Shared sorted samples preserve robust-tail and threshold results")
+    func sharedSortedSamplesPreserveOrderStatistics() throws {
+        let samples: [Float] = [
+            -0.2, 0, 0, 0.01, 0.03, 0.03, 0.08, 0.13,
+            0.21, 0.34, 0.34, 0.55, 0.89, 1.0,
+        ]
+        let sorted = FocusMaskEngine.sortedForOrderStatistics(samples)
+
+        let standaloneRobust = try #require(SharpnessMetrics.robustTailScore(samples))
+        let sharedRobust = try #require(FocusMaskEngine.robustTailScore(
+            samples,
+            sortedSamples: sorted,
+        ))
+        #expect(sharedRobust == standaloneRobust)
+
+        let standaloneThreshold = FocusMaskEngine.adaptiveVisualThreshold(
+            samples,
+            fallback: 0.46,
+            percentile: 0.88,
+            floorMultiplier: 0.32,
+            capAtFallback: true,
+        )
+        let sharedThreshold = FocusMaskEngine.adaptiveVisualThreshold(
+            sortedSamples: sorted,
+            fallback: 0.46,
+            percentile: 0.88,
+            floorMultiplier: 0.32,
+            capAtFallback: true,
+        )
+        #expect(sharedThreshold == standaloneThreshold)
+
+        let nonFiniteSamples = samples + [.nan, .infinity]
+        let nonFiniteThreshold = FocusMaskEngine.adaptiveVisualThreshold(
+            sortedSamples: FocusMaskEngine.sortedForOrderStatistics(nonFiniteSamples),
+            fallback: 0.46,
+            percentile: 0.88,
+            floorMultiplier: 0.32,
+            capAtFallback: true,
+        )
+        #expect(nonFiniteThreshold == standaloneThreshold)
     }
 
     @Test("Alternating samples have expected micro-contrast")

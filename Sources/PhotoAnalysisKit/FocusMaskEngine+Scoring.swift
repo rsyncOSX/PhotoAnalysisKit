@@ -199,19 +199,27 @@ extension FocusMaskEngine {
     /// than 6% of pixels land in the band (sparse edges → likely out-of-focus).
     nonisolated static func robustTailScore(_ samples: [Float]) -> Float? {
         guard !samples.isEmpty else { return nil }
+        return robustTailScore(
+            samples,
+            sortedSamples: sortedForOrderStatistics(samples),
+        )
+    }
+
+    /// Computes the robust-tail score from an already sorted copy of `samples`.
+    /// Callers that need multiple order statistics for the same pixels can share
+    /// the O(n log n) sort while the original samples retain their iteration order.
+    nonisolated static func robustTailScore(
+        _ samples: [Float],
+        sortedSamples: [Float],
+    ) -> Float? {
+        guard !samples.isEmpty, sortedSamples.count == samples.count else { return nil }
         // Note: with n == 1, p20 == p90 == p97 == the single element.
         // The p97 <= p90 branch fires and returns max(0, p90 - p20) == 0.0 (not nil).
         // Callers cannot distinguish "single pixel that scored zero" from "empty" by the return alone.
-        var a = samples
-        let n = a.count
-
-        // Accelerate SIMD sort: O(n log n), no worst-case O(n²) for equal-value inputs.
-        // The previous quickselect with median-of-one pivot was O(n²) when the Laplacian
-        // output is heavily zero-biased (blurry/out-of-focus images at high ISO).
-        vDSP.sort(&a, sortOrder: .ascending)
+        let n = sortedSamples.count
 
         func p(_ frac: Float) -> Float {
-            a[min(max(Int(Float(n - 1) * frac), 0), n - 1)]
+            sortedSamples[min(max(Int(Float(n - 1) * frac), 0), n - 1)]
         }
 
         let p20 = p(0.20)
@@ -234,6 +242,15 @@ extension FocusMaskEngine {
         let densityFactor = min(1.0, (Float(cnt) / Float(n)) / 0.06)
 
         return bandMean * densityFactor
+    }
+
+    nonisolated static func sortedForOrderStatistics(_ samples: [Float]) -> [Float] {
+        var sorted = samples
+        // Accelerate SIMD sort: O(n log n), no worst-case O(n²) for equal-value inputs.
+        // The previous quickselect with median-of-one pivot was O(n²) when the Laplacian
+        // output is heavily zero-biased (blurry/out-of-focus images at high ISO).
+        vDSP.sort(&sorted, sortOrder: .ascending)
+        return sorted
     }
 
     /// Standard deviation of Laplacian sample values.
