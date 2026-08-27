@@ -199,10 +199,22 @@ extension FocusMaskEngine {
     /// than 6% of pixels land in the band (sparse edges → likely out-of-focus).
     nonisolated static func robustTailScore(_ samples: [Float]) -> Float? {
         guard !samples.isEmpty else { return nil }
-        return robustTailScore(
-            samples,
-            sortedSamples: sortedForOrderStatistics(samples),
-        )
+        guard samples.allSatisfy(\.isFinite) else {
+            return robustTailScore(
+                samples,
+                sortedSamples: sortedForOrderStatistics(samples),
+            )
+        }
+
+        let n = samples.count
+        var working = samples
+        let p90Index = min(max(Int(Float(n - 1) * 0.90), 0), n - 1)
+        let p20Index = min(max(Int(Float(n - 1) * 0.20), 0), n - 1)
+        let p97Index = min(max(Int(Float(n - 1) * 0.97), 0), n - 1)
+        let p90 = selectOrderStatistic(in: &working, at: p90Index, within: 0 ... (n - 1))
+        let p20 = selectOrderStatistic(in: &working, at: p20Index, within: 0 ... p90Index)
+        let p97 = selectOrderStatistic(in: &working, at: p97Index, within: p90Index ... (n - 1))
+        return robustTailScore(samples, p20: p20, p90: p90, p97: p97)
     }
 
     /// Computes the robust-tail score from an already sorted copy of `samples`.
@@ -226,9 +238,16 @@ extension FocusMaskEngine {
         let p90 = p(0.90)
         let p97 = p(0.97)
 
-        if p97 <= p90 {
-            return max(0, p90 - p20)
-        }
+        return robustTailScore(samples, p20: p20, p90: p90, p97: p97)
+    }
+
+    private nonisolated static func robustTailScore(
+        _ samples: [Float],
+        p20: Float,
+        p90: Float,
+        p97: Float,
+    ) -> Float {
+        if p97 <= p90 { return max(0, p90 - p20) }
 
         var sum: Float = 0
         var cnt = 0
@@ -239,9 +258,66 @@ extension FocusMaskEngine {
         guard cnt > 0 else { return max(0, p90 - p20) }
 
         let bandMean = sum / Float(cnt)
-        let densityFactor = min(1.0, (Float(cnt) / Float(n)) / 0.06)
+        let densityFactor = min(1.0, (Float(cnt) / Float(samples.count)) / 0.06)
 
         return bandMean * densityFactor
+    }
+
+    /// Finds one exact order statistic without fully sorting the sample buffer.
+    /// Three-way partitioning collapses duplicate-heavy Laplacian data in one
+    /// pass; an introspective depth limit retains O(n log n) worst-case behavior.
+    private nonisolated static func selectOrderStatistic(
+        in values: inout [Float],
+        at targetIndex: Int,
+        within initialBounds: ClosedRange<Int>,
+    ) -> Float {
+        var lowerBound = initialBounds.lowerBound
+        var upperBound = initialBounds.upperBound
+        var remainingDepth = max(1, 2 * Int(log2(Double(upperBound - lowerBound + 1))))
+
+        while lowerBound < upperBound {
+            guard remainingDepth > 0 else {
+                var fallback = Array(values[lowerBound ... upperBound])
+                vDSP.sort(&fallback, sortOrder: .ascending)
+                return fallback[targetIndex - lowerBound]
+            }
+            remainingDepth -= 1
+
+            let middle = lowerBound + (upperBound - lowerBound) / 2
+            let pivot = median(values[lowerBound], values[middle], values[upperBound])
+            var below = lowerBound
+            var current = lowerBound
+            var above = upperBound
+
+            while current <= above {
+                if values[current] < pivot {
+                    values.swapAt(below, current)
+                    below += 1
+                    current += 1
+                } else if values[current] > pivot {
+                    values.swapAt(current, above)
+                    above -= 1
+                } else {
+                    current += 1
+                }
+            }
+
+            if targetIndex < below {
+                upperBound = below - 1
+            } else if targetIndex > above {
+                lowerBound = above + 1
+            } else {
+                return pivot
+            }
+        }
+        return values[lowerBound]
+    }
+
+    private nonisolated static func median(_ first: Float, _ second: Float, _ third: Float) -> Float {
+        if first < second {
+            return second < third ? second : max(first, third)
+        }
+        return first < third ? first : max(second, third)
     }
 
     nonisolated static func sortedForOrderStatistics(_ samples: [Float]) -> [Float] {

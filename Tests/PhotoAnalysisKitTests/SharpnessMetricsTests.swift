@@ -80,6 +80,28 @@ struct SharpnessMetricsTests {
         #expect(nonFiniteThreshold == standaloneThreshold)
     }
 
+    @Test("Selection-based robust tail exactly matches the sorted reference")
+    func selectionMatchesSortedReference() throws {
+        var state: UInt64 = 0xC0FFEE
+        for count in [1, 2, 3, 17, 100, 1_001, 65_537] {
+            var samples = [Float]()
+            samples.reserveCapacity(count)
+            for index in 0 ..< count {
+                state = state &* 6_364_136_223_846_793_005 &+ 1
+                let random = Float((state >> 32) % 1_000) / 999
+                samples.append(index.isMultiple(of: 3) ? 0 : random)
+            }
+
+            let sorted = FocusMaskEngine.sortedForOrderStatistics(samples)
+            let expected = try #require(FocusMaskEngine.robustTailScore(
+                samples,
+                sortedSamples: sorted,
+            ))
+            let actual = try #require(SharpnessMetrics.robustTailScore(samples))
+            #expect(actual == expected)
+        }
+    }
+
     @Test("Alternating samples have expected micro-contrast")
     func alternatingMicroContrast() {
         let samples: [Float] = (0 ..< 1_000).map { $0.isMultiple(of: 2) ? 0 : 1 }
