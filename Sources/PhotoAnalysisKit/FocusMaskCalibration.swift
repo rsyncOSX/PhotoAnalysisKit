@@ -52,13 +52,14 @@ extension FocusMaskEngine {
                     fileConfig.apertureHint = .from(aperture: input.aperture)
                     fileConfig.enableSubjectClassification = false
                     guard let normalizedImage = Self.normalizeToSRGB(input.image),
-                          let laplacian = Self.buildAmplifiedLaplacian(
+                          let laplacian = Self.buildFocusMaskDetail(
                         from: CIImage(cgImage: normalizedImage),
                         config: fileConfig,
                     ) else { return nil }
                     guard !Task.isCancelled else { return nil }
                     let samples = Self.redSamples(in: laplacian.extent, from: laplacian, context: context)
-                        .filter { $0.isFinite && $0 > 0 }
+                        // Ignore floating-point residue from otherwise constant pixels.
+                        .filter { $0.isFinite && $0 > 1e-6 }
                     guard !Task.isCancelled else { return nil }
                     let strideBy = max(samples.count / 4096, 1)
                     return Swift.stride(from: 0, to: samples.count, by: strideBy).map { samples[$0] }

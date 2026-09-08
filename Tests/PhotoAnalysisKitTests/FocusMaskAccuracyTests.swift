@@ -6,6 +6,39 @@ import Testing
 
 @Suite("Focus mask accuracy")
 struct FocusMaskAccuracyTests {
+    @Test("Flat images cannot calibrate from artificial border edges", arguments: [64, 256])
+    func flatCalibration(size: Int) async throws {
+        let extent = CGRect(x: 0, y: 0, width: size, height: size)
+        let context = FocusMaskEngine().context
+        let image = try #require(context.createCGImage(
+            CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: extent),
+            from: extent
+        ))
+        let result = await PhotoAnalyzer().calibrate(
+            from: [PhotoAnalysisInput(image: image)], minimumSuccessfulImages: 1
+        )
+        #expect(result == nil)
+    }
+
+    @Test("Calibration responds to real detail loss", arguments: [128, 256])
+    func blurredCalibration(size: Int) async throws {
+        let image = try #require(makeCheckerboardImage(size: size))
+        let source = CIImage(cgImage: image)
+        let blur = CIFilter.gaussianBlur()
+        blur.inputImage = source.clampedToExtent()
+        blur.radius = 3
+        let blurred = try #require(blur.outputImage)
+        let blurredImage = try #require(FocusMaskEngine().context.createCGImage(blurred, from: source.extent))
+        let analyzer = PhotoAnalyzer()
+        let sharpResult = try #require(await analyzer.calibrate(
+            from: [PhotoAnalysisInput(image: image)], minimumSuccessfulImages: 1
+        ))
+        let blurredResult = try #require(await analyzer.calibrate(
+            from: [PhotoAnalysisInput(image: blurredImage)], minimumSuccessfulImages: 1
+        ))
+        #expect(sharpResult.p90 > blurredResult.p90)
+    }
+
     @Test("AF proximity cannot promote weak detail to high confidence")
     func weakAFConfidence() {
         let patch = FocusPatchRanking(

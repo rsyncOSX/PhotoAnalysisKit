@@ -2,6 +2,17 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 
 extension FocusMaskEngine {
+    /// Shared by calibration, patch ranking, and rendering. Keep the signal in
+    /// native pixels and clamp the input so image borders do not invent detail.
+    nonisolated static func buildFocusMaskDetail(
+        from image: CIImage,
+        config: SharpnessConfiguration
+    ) -> CIImage? {
+        var detailConfig = config
+        detailConfig.preBlurRadius = max(0.35, config.preBlurRadius * 0.52)
+        return buildAmplifiedLaplacian(from: image, config: detailConfig, nativeMask: true)
+    }
+
     nonisolated func generateFocusMask(
         from cgImage: CGImage,
         scale: CGFloat,
@@ -101,12 +112,8 @@ extension FocusMaskEngine {
             return FocusMaskRenderResult(image: nil, diagnostics: emptyDiagnostics, evidence: evidence)
         }
         let scaledImage = inputImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        // One fine-detail signal drives both patch selection and the overlay.
-        // Native-pixel blur avoids suppressing more detail as resolution increases.
-        var detailConfig = config
-        detailConfig.preBlurRadius = max(0.35, config.preBlurRadius * 0.52)
-        guard let boostedLaplacian = Self.buildAmplifiedLaplacian(
-            from: scaledImage, config: detailConfig, nativeMask: true
+        guard let boostedLaplacian = Self.buildFocusMaskDetail(
+            from: scaledImage, config: config
         ) else {
             return FocusMaskRenderResult(image: nil, diagnostics: emptyDiagnostics, evidence: evidence)
         }
