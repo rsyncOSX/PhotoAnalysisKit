@@ -870,24 +870,24 @@ extension FocusMaskEngine {
         return max(1.0, min(sqrt(max(longestSide, 512.0) / 512.0), 3.0))
     }
 
-    nonisolated static func buildAmplifiedLaplacian(from image: CIImage, config: SharpnessConfiguration) -> CIImage? {
+    nonisolated static func buildAmplifiedLaplacian(from image: CIImage, config: SharpnessConfiguration, nativeMask: Bool = false) -> CIImage? {
         guard !Task.isCancelled else { return nil }
         let isoFactor = Self.isoScalingFactor(iso: config.iso)
-        let resFactor = Self.resolutionScalingFactor(for: image.extent)
+        let resFactor: Float = nativeMask ? 1 : Self.resolutionScalingFactor(for: image.extent)
         // Landscape (deep DoF) damps the combined ISO × resolution blur so the whole-
         // frame edge energy isn't smoothed away before the Laplacian fires.
         let blurDamp = config.apertureHint.blurDamp
         let effectiveRadius = min(config.preBlurRadius * isoFactor * resFactor * blurDamp, 100.0)
 
         let preBlur = CIFilter.gaussianBlur()
-        preBlur.inputImage = image
+        preBlur.inputImage = nativeMask ? image.clampedToExtent() : image
         preBlur.radius = effectiveRadius
         guard let smoothed = preBlur.outputImage else { return nil }
         guard !Task.isCancelled else { return nil }
 
         guard let kernel = _focusMagnitudeKernel else { return nil }
         guard let laplacianOutput = kernel.apply(
-            extent: smoothed.extent.insetBy(dx: 1, dy: 1),
+            extent: nativeMask ? image.extent : smoothed.extent.insetBy(dx: 1, dy: 1),
             roiCallback: { _, rect in rect.insetBy(dx: -2, dy: -2) },
             arguments: [smoothed],
         ) else { return nil }

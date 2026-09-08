@@ -27,10 +27,10 @@ public struct SharpnessConfiguration: Sendable {
     /// than real edges. Default 400 (no adaptation).
     public var iso: Int = 400
     public var threshold: Float = 0.46
-    public var dilationRadius: Float = 1.0
+    public var dilationRadius: Float = 0.0
     public var energyMultiplier: Float = Self.stableScoringEnergyMultiplier
-    public var erosionRadius: Float = 1.0
-    public var featherRadius: Float = 2.0
+    public var erosionRadius: Float = 0.0
+    public var featherRadius: Float = 0.5
     public var showRawLaplacian: Bool = false
     public var guaranteeVisibleFocusEvidence: Bool = false
     public var minimumEvidenceCoverage: Float = 0.001
@@ -173,9 +173,9 @@ extension SharpnessConfiguration {
         var c = SharpnessConfiguration()
         c.preBlurRadius = 2.2
         c.threshold = 0.46
-        c.dilationRadius = 1.0
-        c.erosionRadius = 1.0
-        c.featherRadius = 2.0
+        c.dilationRadius = 0.0
+        c.erosionRadius = 0.0
+        c.featherRadius = 0.5
 
         c.borderInsetFraction = 0.05
         c.salientWeight = 0.85

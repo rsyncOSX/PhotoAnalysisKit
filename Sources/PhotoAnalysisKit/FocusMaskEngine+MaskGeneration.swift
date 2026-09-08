@@ -101,23 +101,14 @@ extension FocusMaskEngine {
             return FocusMaskRenderResult(image: nil, diagnostics: emptyDiagnostics, evidence: evidence)
         }
         let scaledImage = inputImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        guard let rawLaplacian = Self.buildAmplifiedLaplacian(from: scaledImage, config: config) else {
+        // One fine-detail signal drives both patch selection and the overlay.
+        // Native-pixel blur avoids suppressing more detail as resolution increases.
+        var detailConfig = config
+        detailConfig.preBlurRadius = max(0.35, config.preBlurRadius * 0.52)
+        guard let boostedLaplacian = Self.buildAmplifiedLaplacian(
+            from: scaledImage, config: detailConfig, nativeMask: true
+        ) else {
             return FocusMaskRenderResult(image: nil, diagnostics: emptyDiagnostics, evidence: evidence)
-        }
-        guard !Task.isCancelled else {
-            return FocusMaskRenderResult(image: nil, diagnostics: emptyDiagnostics, evidence: evidence)
-        }
-
-        let boostedLaplacian: CIImage
-        if config.borderInsetFraction > 0 {
-            let ext = scaledImage.extent
-            let borderX = ext.width * CGFloat(config.borderInsetFraction)
-            let borderY = ext.height * CGFloat(config.borderInsetFraction)
-            let innerRect = ext.insetBy(dx: borderX, dy: borderY)
-            let blackBg = CIImage(color: .black).cropped(to: ext)
-            boostedLaplacian = rawLaplacian.cropped(to: innerRect).composited(over: blackBg)
-        } else {
-            boostedLaplacian = rawLaplacian
         }
 
         if config.showRawLaplacian {
@@ -154,7 +145,7 @@ extension FocusMaskEngine {
             in: scaledImage.extent,
         )
 
-        let requestedEvidenceRegion = evidenceRegion ?? .none
+        let requestedEvidenceRegion: FocusEvidenceRegion = config.isolateMaskToSubject ? (evidenceRegion ?? .none) : .global
         let visualEvidenceRegion: FocusEvidenceRegion = switch requestedEvidenceRegion {
         case .afCenter where afCenterRect != nil:
             .afCenter
@@ -182,47 +173,25 @@ extension FocusMaskEngine {
             }
         }
 
-        let fineLaplacian: CIImage?
-        if selection.afRect != nil || afCenterRect != nil || afNeighborhoodRect != nil {
-            var fineConfig = config
-            fineConfig.preBlurRadius = max(0.35, config.preBlurRadius * 0.52)
-            fineLaplacian = Self.buildAmplifiedLaplacian(from: scaledImage, config: fineConfig) ?? boostedLaplacian
-        } else {
-            fineLaplacian = nil
-        }
-
         let afPixelCenter = Self.afPixelCenter(afPoint: afPoint, in: scaledImage.extent)
-        func afWeightedSource(for rect: CGRect) -> CIImage {
-            let source = fineLaplacian ?? boostedLaplacian
-            guard let afPixelCenter,
-                  let weighted = Self.centerWeightedLaplacian(
-                      source,
-                      center: afPixelCenter,
-                      rect: rect,
-                      extent: scaledImage.extent,
-                  )
-            else { return source }
-            return weighted
-        }
-
         let searchRegions: [(CGRect, CIImage)] = switch visualEvidenceRegion {
         case .afCenter:
             if let afCenterRect {
-                [(afCenterRect, afWeightedSource(for: afCenterRect))]
+                [(afCenterRect, boostedLaplacian)]
             } else {
                 []
             }
 
         case .afNeighborhood:
             if let afNeighborhoodRect {
-                [(afNeighborhoodRect, afWeightedSource(for: afNeighborhoodRect))]
+                [(afNeighborhoodRect, boostedLaplacian)]
             } else {
                 []
             }
 
         case .afPoint:
             if let afRect = selection.afRect {
-                [(afRect, afWeightedSource(for: afRect))]
+                [(afRect, boostedLaplacian)]
             } else {
                 []
             }
@@ -236,7 +205,7 @@ extension FocusMaskEngine {
 
         case .mixed:
             [
-                selection.afRect.map { ($0, afWeightedSource(for: $0)) },
+                selection.afRect.map { ($0, boostedLaplacian) },
                 selection.saliencyRect.map { ($0, boostedLaplacian) }
             ].compactMap { $0 }
 
@@ -270,7 +239,7 @@ extension FocusMaskEngine {
             rankings.append(Self.patchRanking(
                 for: afPatchRect,
                 searchRegion: scaledImage.extent,
-                sourceImage: fineLaplacian ?? boostedLaplacian,
+                sourceImage: boostedLaplacian,
                 extent: scaledImage.extent,
                 afPoint: afPoint,
                 visualRegion: visualEvidenceRegion,
@@ -282,7 +251,8 @@ extension FocusMaskEngine {
             visualRegion: visualEvidenceRegion,
         )
         let overlayStyle: FocusEvidenceOverlayStyle = visualEvidenceRegion == .global ? .globalEdges : .subjectEdges
-        let patchRects = selectedPatches.map { Self.pixelRect(fromNormalizedRect: $0.normalizedRect, in: scaledImage.extent) }
+        // Patches summarize evidence; they must not truncate the visible focus map.
+        let patchRects = searchRegions.map { $0.0 }
         let visualSamples = patchRects.flatMap { Self.redSamples(in: $0, from: boostedLaplacian, context: context) }
         var visualThreshold = Self.adaptiveVisualThreshold(
             visualSamples,
@@ -732,7 +702,7 @@ extension FocusMaskEngine {
         return (.medium, "Subject detail is usable but not strongly localized")
     }
 
-    private nonisolated static func buildColorizedThresholdedEdges(
+    nonisolated static func buildColorizedThresholdedEdges(
         from laplacian: CIImage,
         threshold: Float,
         config: SharpnessConfiguration,
@@ -761,12 +731,6 @@ extension FocusMaskEngine {
             dilate.radius = config.dilationRadius
             binary = dilate.outputImage ?? binary
         }
-
-        // Restore narrow edge lines after connectivity-preserving dilation.
-        let fineThin = CIFilter.morphologyMinimum()
-        fineThin.inputImage = binary
-        fineThin.radius = 0.6
-        binary = fineThin.outputImage ?? binary
 
         let colorize = CIFilter.colorMatrix()
         colorize.inputImage = binary
