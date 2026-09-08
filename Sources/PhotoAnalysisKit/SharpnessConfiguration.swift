@@ -32,6 +32,8 @@ public struct SharpnessConfiguration: Sendable {
     public var erosionRadius: Float = 0.0
     public var featherRadius: Float = 0.5
     public var showRawLaplacian: Bool = false
+    /// Retained for source compatibility. Rendering no longer relaxes its
+    /// evidence threshold to force visibility on weak or unfocused images.
     public var guaranteeVisibleFocusEvidence: Bool = false
     public var minimumEvidenceCoverage: Float = 0.001
     public var afCenterRegionRadius: Float = 0.025

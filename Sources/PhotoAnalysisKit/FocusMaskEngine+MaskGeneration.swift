@@ -254,22 +254,15 @@ extension FocusMaskEngine {
         // Patches summarize evidence; they must not truncate the visible focus map.
         let patchRects = searchRegions.map { $0.0 }
         let visualSamples = patchRects.flatMap { Self.redSamples(in: $0, from: boostedLaplacian, context: context) }
-        var visualThreshold = Self.adaptiveVisualThreshold(
+        let visualThreshold = Self.adaptiveVisualThreshold(
             visualSamples,
             fallback: config.threshold,
             percentile: visualEvidenceRegion.isAFAnchored ? 0.82 : 0.90,
             floorMultiplier: visualEvidenceRegion.isAFAnchored ? 0.32 : 0.55,
             capAtFallback: visualEvidenceRegion.isAFAnchored,
         )
-        let visibility = Self.thresholdEnsuringVisibleEvidence(
-            visualSamples,
-            threshold: visualThreshold,
-            minimumCoverage: config.minimumEvidenceCoverage,
-            enabled: config.guaranteeVisibleFocusEvidence,
-        )
-        visualThreshold = visibility.threshold
-        let coverage = visibility.coverage
-        let relaxedForVisibility = visibility.relaxed
+        // A weak image is allowed to produce an empty mask. Visibility must
+        // never lower the threshold merely to manufacture an overlay.
         let edgeMask = Self.buildColorizedThresholdedEdges(
             from: boostedLaplacian,
             threshold: visualThreshold,
@@ -286,6 +279,9 @@ extension FocusMaskEngine {
             return feather.outputImage ?? mask
         }
         let croppedMask = featheredMask?.cropped(to: scaledImage.extent)
+        let coverage = croppedMask.map {
+            Self.renderedMaskCoverage($0, regions: patchRects, extent: scaledImage.extent, context: context)
+        } ?? 0
         return FocusMaskRenderResult(
             image: croppedMask.flatMap { context.createCGImage($0, from: $0.extent) },
             diagnostics: FocusMaskDiagnostics(regionSource: selection.source, visualThreshold: visualThreshold),
@@ -298,9 +294,42 @@ extension FocusMaskEngine {
                 afPoint: afPoint,
                 effectiveVisualThreshold: visualThreshold,
                 maskCoverage: coverage,
-                relaxedForVisibility: relaxedForVisibility,
+                relaxedForVisibility: false,
             ),
         )
+    }
+
+    /// Fraction of the rendered region with visible alpha, after morphology
+    /// and feathering. GPU reductions avoid copying a full-resolution mask to CPU.
+    nonisolated static func renderedMaskCoverage(
+        _ mask: CIImage, regions: [CGRect], extent: CGRect, context: CIContext
+    ) -> Float {
+        let alpha = CIFilter.colorMatrix()
+        alpha.inputImage = mask
+        alpha.rVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        alpha.gVector = alpha.rVector
+        alpha.bVector = alpha.rVector
+        alpha.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        alpha.biasVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        let threshold = CIFilter.colorThreshold()
+        threshold.inputImage = alpha.outputImage
+        threshold.threshold = 0.05
+        guard let visible = threshold.outputImage,
+              let regionMask = clip(CIImage(color: .white).cropped(to: extent), to: regions, extent: extent),
+              let clipped = clip(visible, to: regions, extent: extent) else { return 0 }
+        func mean(_ image: CIImage) -> Float {
+            let average = CIFilter.areaAverage()
+            average.inputImage = image
+            average.extent = extent
+            guard let output = average.outputImage else { return 0 }
+            var pixel = [Float](repeating: 0, count: 4)
+            context.render(output, toBitmap: &pixel, rowBytes: 16,
+                           bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBAf, colorSpace: nil)
+            return pixel[0].isFinite ? pixel[0] : 0
+        }
+        let regionFraction = mean(regionMask)
+        guard regionFraction > 0 else { return 0 }
+        return min(max(mean(clipped) / regionFraction, 0), 1)
     }
 
     nonisolated static func focusMaskRegionSelection(
@@ -659,6 +688,8 @@ extension FocusMaskEngine {
             patches: selectedPatches,
             afDistance: afDistance,
             dominance: dominance,
+            renderedCoverage: maskCoverage,
+            relaxedForVisibility: relaxedForVisibility,
         )
 
         result.effectiveVisualThreshold = effectiveVisualThreshold
@@ -681,22 +712,33 @@ extension FocusMaskEngine {
         patches: [FocusPatchRanking],
         afDistance: Float?,
         dominance: Float?,
+        renderedCoverage: Float? = nil,
+        relaxedForVisibility: Bool = false,
     ) -> (value: FocusEvidenceConfidence, reason: String) {
         guard let best = patches.first, best.compositeScore > 0 else {
             return (.low, "No viable local focus patch")
         }
+        guard let renderedCoverage, renderedCoverage.isFinite, renderedCoverage >= 0.001,
+              best.robustTailScore >= 0.01, best.microContrast >= 0.005,
+              best.coverage >= 0.001, !relaxedForVisibility else {
+            return (.low, "Rendered detail is weak or below the evidence threshold")
+        }
+        // Conservative evidence gates, not a calibrated probability of focus.
+        let strongDetail = best.robustTailScore >= 0.05 && best.microContrast >= 0.02
         if visualRegion.isAFAnchored, let afDistance {
-            if afDistance <= 0.05 {
+            if afDistance <= 0.05, strongDetail {
                 return (.high, "AF-local patch is spatially aligned")
             }
-            return (.low, "AF-local patch is more than 5% from the AF marker")
+            return afDistance > 0.05
+                ? (.low, "AF-local patch is more than 5% from the AF marker")
+                : (.medium, "AF-local detail is measurable but not strong")
         }
         if visualRegion == .global {
             return best.compositeScore >= 0.10
                 ? (.medium, "Detail is measurable but global-only")
                 : (.low, "Global detail is weak")
         }
-        if best.silhouetteFraction < 0.20, (dominance ?? 1) >= 1.08 {
+        if strongDetail, best.silhouetteFraction < 0.20, (dominance ?? 1) >= 1.08 {
             return (.high, "Interior subject patch clearly dominates")
         }
         return (.medium, "Subject detail is usable but not strongly localized")

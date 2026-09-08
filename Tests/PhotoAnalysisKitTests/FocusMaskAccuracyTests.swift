@@ -6,6 +6,33 @@ import Testing
 
 @Suite("Focus mask accuracy")
 struct FocusMaskAccuracyTests {
+    @Test("AF proximity cannot promote weak detail to high confidence")
+    func weakAFConfidence() {
+        let patch = FocusPatchRanking(
+            normalizedRect: CGRect(x: 0.45, y: 0.45, width: 0.1, height: 0.1),
+            robustTailScore: 0, microContrast: 0, coverage: 0,
+            distanceToAF: 0, silhouetteFraction: 0, compositeScore: 0.12, containsAFPoint: true
+        )
+        let confidence = FocusMaskEngine.focusEvidenceConfidence(
+            visualRegion: .afCenter, patches: [patch], afDistance: 0, dominance: 2, renderedCoverage: 0.5
+        )
+        #expect(confidence.value == .low)
+    }
+
+    @Test("Coverage reflects edges erased by requested erosion")
+    func renderedCoverage() throws {
+        let extent = CGRect(x: 0, y: 0, width: 32, height: 32)
+        let line = CIImage(color: .white).cropped(to: CGRect(x: 16, y: 0, width: 1, height: 32))
+            .composited(over: CIImage(color: .black).cropped(to: extent))
+        let engine = FocusMaskEngine()
+        var config = SharpnessConfiguration()
+        let preserved = try #require(FocusMaskEngine.buildColorizedThresholdedEdges(from: line, threshold: 0.5, config: config))
+        #expect(abs(FocusMaskEngine.renderedMaskCoverage(preserved, regions: [extent], extent: extent, context: engine.context) - 1.0 / 32) < 0.001)
+        config.erosionRadius = 1
+        let erased = try #require(FocusMaskEngine.buildColorizedThresholdedEdges(from: line, threshold: 0.5, config: config))
+        #expect(FocusMaskEngine.renderedMaskCoverage(erased, regions: [extent], extent: extent, context: engine.context) == 0)
+    }
+
     @Test("Default processing preserves a one-pixel edge")
     func thinEdge() throws {
         let extent = CGRect(x: 0, y: 0, width: 32, height: 32)
