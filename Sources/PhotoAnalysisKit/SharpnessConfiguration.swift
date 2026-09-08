@@ -66,9 +66,10 @@ public struct SharpnessConfiguration: Sendable {
     /// 0 disables the penalty, 0.55 is the historical default.
     public var silhouettePenaltyStrength: Float = 0.55
 
-    /// Optional second fine-detail Laplacian pass blended into scoring. Higher values
-    /// cost more compute but preserve small subject detail at larger scoring sizes.
-    /// The focus mask overlay keeps using the primary pass.
+    /// Optional second fine-detail Laplacian pass blended into sharpness scoring.
+    /// Higher values cost more compute but preserve small subject detail at larger
+    /// scoring sizes. Focus-mask ranking and rendering use a separate, consistent
+    /// fine-detail pass, so changing this value does not alter the mask overlay.
     public var fineDetailBlendWeight: Float = 0.0
 
     /// When true, runs VNClassifyImageRequest alongside saliency detection.
