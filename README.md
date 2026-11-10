@@ -2,8 +2,8 @@
 
 PhotoAnalysisKit is a neutral macOS image-analysis package extracted from
 RawCull. It owns sharpness scoring, Vision saliency/classification, focus
-evidence and mask rendering, calibration, and Vision feature-print generation
-and comparison.
+evidence and mask rendering, calibration, animal close-up detection, and Vision
+feature-print generation and comparison.
 
 The package accepts `CGImage` values plus capture metadata. It deliberately has
 no knowledge of RAW formats, file models, application settings, persistence,
@@ -99,6 +99,22 @@ let results = await analyzer.analyzeBatch(
 The returned array preserves request order even though progress is reported in
 completion order. A `nil` return means the parent task was cancelled; individual
 decode failures remain represented by a batch result whose `analysis` is `nil`.
+
+## Animal close-up detection
+
+Pass an upright `CGImage` to detect animal head and eye crop regions using
+Apple Vision's animal body pose request.
+
+```swift
+import PhotoAnalysisKit
+
+let regions = try AnimalCloseUpDetector.regions(in: uprightImage)
+```
+
+Each region has a `kind` of `.head` or `.eye` and a `bounds` rectangle in
+normalized image coordinates with the origin at the top left. Head bounds are
+clipped to the image, and eye bounds are clipped to the corresponding head.
+The detector returns an empty array when it finds no usable head landmarks.
 
 ## Vision feature prints
 
