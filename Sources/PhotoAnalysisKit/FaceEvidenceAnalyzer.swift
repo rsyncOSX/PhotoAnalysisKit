@@ -23,6 +23,9 @@ public struct FaceEvidenceResult: Codable, Equatable, Sendable {
 /// Analyzes an orientation-corrected preview. Apply EXIF rotation and mirroring
 /// before calling, and supply the same upright preview when rendering close-ups.
 public actor FaceEvidenceAnalyzer {
+    public nonisolated static let algorithmVersion = 2
+    public nonisolated static var detectorRevision: Int { VNDetectFaceRectanglesRequest.defaultRevision }
+
     public init() {}
 
     /// Returns an empty list for a successful scan with no faces.
@@ -30,6 +33,7 @@ public actor FaceEvidenceAnalyzer {
     public func analyze(_ uprightPreview: CGImage) throws -> FaceEvidenceResult {
         try Task.checkCancellation()
         let request = VNDetectFaceRectanglesRequest()
+        request.revision = Self.detectorRevision
         try VNImageRequestHandler(cgImage: uprightPreview, orientation: .up).perform([request])
         var boxes = (request.results ?? []).compactMap {
             Self.topLeftBounds(fromVision: $0.boundingBox)
@@ -53,7 +57,7 @@ public actor FaceEvidenceAnalyzer {
         }
         try Task.checkCancellation()
         return FaceEvidenceResult(
-            algorithmVersion: 2,
+            algorithmVersion: Self.algorithmVersion,
             detectorRevision: request.revision,
             previewWidth: uprightPreview.width,
             previewHeight: uprightPreview.height,
