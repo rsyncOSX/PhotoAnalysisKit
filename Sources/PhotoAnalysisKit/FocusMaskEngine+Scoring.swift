@@ -195,16 +195,18 @@ extension FocusMaskEngine {
             "photography", "scene", "background", "texture", "pattern"
         ]
 
+        func words(in identifier: String) -> Set<String> {
+            Set(identifier.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+        }
+
         for obs in observations where obs.confidence >= 0.06 {
-            let id = obs.identifier.lowercased()
-            if subjectKeywords.contains(where: { id.contains($0) }) {
+            if !words(in: obs.identifier).isDisjoint(with: subjectKeywords) {
                 return obs.identifier.replacingOccurrences(of: "_", with: " ")
             }
         }
 
         for obs in observations where obs.confidence >= 0.15 {
-            let id = obs.identifier.lowercased()
-            if !environmentTokens.contains(where: { id.contains($0) }) {
+            if words(in: obs.identifier).isDisjoint(with: environmentTokens) {
                 return obs.identifier.replacingOccurrences(of: "_", with: " ")
             }
         }
