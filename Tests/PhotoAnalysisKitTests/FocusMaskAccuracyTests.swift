@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import ImageIO
 @testable import PhotoAnalysisKit
 import Testing
 
@@ -47,6 +48,44 @@ struct FocusMaskAccuracyTests {
             )
             #expect(result.breakdown?.focusMaskVisualThreshold == sharpResult.threshold)
         }
+    }
+
+    @Test(
+        "AF scoring follows detail in rotated and mirrored decoded previews",
+        arguments: [
+            (CGImagePropertyOrientation.up, CGPoint(x: 0.25, y: 0.25)),
+            (.right, CGPoint(x: 0.75, y: 0.25)),
+            (.down, CGPoint(x: 0.75, y: 0.75)),
+            (.upMirrored, CGPoint(x: 0.75, y: 0.25)),
+            (.downMirrored, CGPoint(x: 0.25, y: 0.75))
+        ]
+    )
+    func orientedAFRegion(orientation: CGImagePropertyOrientation, detailPoint: CGPoint) throws {
+        let tile = try #require(makeCheckerboardImage(size: 128))
+        let extent = CGRect(x: 0, y: 0, width: 256, height: 256)
+        let base = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: extent)
+        let image = CIImage(cgImage: tile)
+            .transformed(by: CGAffineTransform(translationX: 0, y: 128))
+            .composited(over: base)
+            .oriented(orientation)
+        let engine = FocusMaskEngine()
+        let preview = try #require(engine.context.createCGImage(image, from: image.extent))
+        let noSaliency = SaliencyDetection(candidates: [], saliencyInfo: nil)
+
+        func afScore(at point: CGPoint) throws -> Float {
+            try #require(FocusMaskEngine.computeSharpnessBreakdown(
+                from: CIImage(cgImage: preview),
+                saliencyDetection: noSaliency,
+                afPoint: point,
+                context: engine.context,
+                config: SharpnessConfiguration()
+            )?.afPointScore)
+        }
+
+        let detail = try afScore(at: detailPoint)
+        let flat = try afScore(at: CGPoint(x: 1 - detailPoint.x, y: 1 - detailPoint.y))
+        #expect(detail > 0.01)
+        #expect(flat < detail * 0.1)
     }
 
     @Test("AF proximity cannot promote weak detail to high confidence")
