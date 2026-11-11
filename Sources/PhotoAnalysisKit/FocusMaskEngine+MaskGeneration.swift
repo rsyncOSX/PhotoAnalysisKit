@@ -260,14 +260,9 @@ extension FocusMaskEngine {
         let overlayStyle: FocusEvidenceOverlayStyle = visualEvidenceRegion == .global ? .globalEdges : .subjectEdges
         // Patches summarize evidence; they must not truncate the visible focus map.
         let patchRects = searchRegions.map { $0.0 }
-        let visualSamples = patchRects.flatMap { Self.redSamples(in: $0, from: boostedLaplacian, context: context) }
-        let visualThreshold = Self.adaptiveVisualThreshold(
-            visualSamples,
-            fallback: config.threshold,
-            percentile: visualEvidenceRegion.isAFAnchored ? 0.82 : 0.90,
-            floorMultiplier: visualEvidenceRegion.isAFAnchored ? 0.32 : 0.55,
-            capAtFallback: visualEvidenceRegion.isAFAnchored,
-        )
+        let visualThreshold = config.threshold.isFinite
+            ? min(max(config.threshold, 0.01), 0.95)
+            : SharpnessConfiguration().threshold
         // A weak image is allowed to produce an empty mask. Visibility must
         // never lower the threshold merely to manufacture an overlay.
         let edgeMask = Self.buildColorizedThresholdedEdges(

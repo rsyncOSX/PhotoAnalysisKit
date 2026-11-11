@@ -26,6 +26,8 @@ public struct SharpnessConfiguration: Sendable {
     /// where noise would otherwise cause the Laplacian to fire on noise rather
     /// than real edges. Default 400 (no adaptation).
     public var iso: Int = 400
+    /// Fixed overlay cutoff in edge-energy units. Set this to the calibration result
+    /// to use the same cutoff across images. Effective range: 0.01–0.95.
     public var threshold: Float = 0.46
     public var dilationRadius: Float = 0.0
     public var energyMultiplier: Float = Self.stableScoringEnergyMultiplier

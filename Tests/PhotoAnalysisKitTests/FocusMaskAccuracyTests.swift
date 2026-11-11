@@ -37,6 +37,16 @@ struct FocusMaskAccuracyTests {
             from: [PhotoAnalysisInput(image: blurredImage)], minimumSuccessfulImages: 1
         ))
         #expect(sharpResult.p90 > blurredResult.p90)
+
+        var config = SharpnessConfiguration()
+        config.threshold = sharpResult.threshold
+        for sample in [image, blurredImage] {
+            let result = await analyzer.analyzeWithFocusMask(
+                PhotoAnalysisInput(image: sample, normalizedAFPoint: CGPoint(x: 0.5, y: 0.5)),
+                configuration: config
+            )
+            #expect(result.breakdown?.focusMaskVisualThreshold == sharpResult.threshold)
+        }
     }
 
     @Test("AF proximity cannot promote weak detail to high confidence")
