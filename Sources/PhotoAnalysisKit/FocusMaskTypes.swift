@@ -143,6 +143,7 @@ public struct FocusEvidence: Equatable, Sendable {
     public nonisolated let afNeighborhoodScore: Float?
     public nonisolated var effectiveVisualThreshold: Float?
     public nonisolated var maskCoverage: Float?
+    /// Retained for source compatibility. Newly rendered masks never relax the cutoff.
     public nonisolated var relaxedForVisibility: Bool
     public nonisolated var visualizedRegion: FocusEvidenceRegion?
     public nonisolated var afDistanceFromCentroid: Float?

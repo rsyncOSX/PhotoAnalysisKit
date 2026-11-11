@@ -296,7 +296,6 @@ extension FocusMaskEngine {
                 afPoint: afPoint,
                 effectiveVisualThreshold: visualThreshold,
                 maskCoverage: coverage,
-                relaxedForVisibility: false,
             ),
         )
     }
@@ -650,7 +649,6 @@ extension FocusMaskEngine {
         afPoint: CGPoint?,
         effectiveVisualThreshold: Float? = nil,
         maskCoverage: Float? = nil,
-        relaxedForVisibility: Bool = false,
     ) -> FocusEvidence {
         var result = evidence ?? FocusEvidence(
             winningRegion: visualRegion,
@@ -672,12 +670,11 @@ extension FocusMaskEngine {
             afDistance: afDistance,
             dominance: dominance,
             renderedCoverage: maskCoverage,
-            relaxedForVisibility: relaxedForVisibility,
         )
 
         result.effectiveVisualThreshold = effectiveVisualThreshold
         result.maskCoverage = maskCoverage ?? selectedPatches.map(\.coverage).max()
-        result.relaxedForVisibility = relaxedForVisibility
+        result.relaxedForVisibility = false
         result.visualizedRegion = visualRegion
         result.afDistanceFromCentroid = afDistance
         result.patchRankings = sortedRankings
@@ -696,14 +693,13 @@ extension FocusMaskEngine {
         afDistance: Float?,
         dominance: Float?,
         renderedCoverage: Float? = nil,
-        relaxedForVisibility: Bool = false,
     ) -> (value: FocusEvidenceConfidence, reason: String) {
         guard let best = patches.first, best.compositeScore > 0 else {
             return (.low, "No viable local focus patch")
         }
         guard let renderedCoverage, renderedCoverage.isFinite, renderedCoverage >= 0.001,
               best.robustTailScore >= 0.01, best.microContrast >= 0.005,
-              best.coverage >= 0.001, !relaxedForVisibility else {
+              best.coverage >= 0.001 else {
             return (.low, "Rendered detail is weak or below the evidence threshold")
         }
         // Conservative evidence gates, not a calibrated probability of focus.

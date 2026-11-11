@@ -37,6 +37,7 @@ public struct SharpnessConfiguration: Sendable {
     /// Retained for source compatibility. Rendering no longer relaxes its
     /// evidence threshold to force visibility on weak or unfocused images.
     public var guaranteeVisibleFocusEvidence: Bool = false
+    /// Retained for source compatibility. Overlay rendering uses a fixed cutoff.
     public var minimumEvidenceCoverage: Float = 0.001
     public var afCenterRegionRadius: Float = 0.025
     public var afNeighborhoodRegionRadius: Float = 0.075
