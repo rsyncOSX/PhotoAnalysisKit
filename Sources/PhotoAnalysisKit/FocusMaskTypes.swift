@@ -19,6 +19,7 @@ public struct SaliencyCandidate: Equatable, Sendable {
 public struct SaliencyDetection: Sendable {
     public nonisolated let candidates: [SaliencyCandidate]
     public nonisolated let saliencyInfo: SaliencySummary?
+    var saliencyRequestFailed = false
 }
 
 public struct SaliencySelection: Equatable, Sendable {

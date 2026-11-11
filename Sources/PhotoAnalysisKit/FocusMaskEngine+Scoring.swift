@@ -2,7 +2,10 @@ import Accelerate
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
+import OSLog
 import Vision
+
+private let visionLogger = Logger(subsystem: "PhotoAnalysisKit", category: "Vision")
 
 private nonisolated let _focusMagnitudeKernel: CIKernel? = {
     guard let url = Bundle.module.url(forResource: "default", withExtension: "metallib"),
@@ -62,10 +65,15 @@ extension FocusMaskEngine {
     nonisolated static func detectSaliencyAndClassify(for cgImage: CGImage, classify: Bool) -> SaliencyDetection {
         guard !Task.isCancelled else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
         let saliencyRequest = VNGenerateAttentionBasedSaliencyImageRequest()
-        let classifyRequest = VNClassifyImageRequest()
-        let requests: [VNRequest] = classify ? [saliencyRequest, classifyRequest] : [saliencyRequest]
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        try? handler.perform(requests)
+        do {
+            try handler.perform([saliencyRequest])
+        } catch {
+            if !Task.isCancelled {
+                visionLogger.error("Saliency request failed: \(String(describing: error), privacy: .public)")
+            }
+            return SaliencyDetection(candidates: [], saliencyInfo: nil, saliencyRequestFailed: true)
+        }
         guard !Task.isCancelled else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
 
         guard let observation = saliencyRequest.results?.first,
@@ -73,7 +81,18 @@ extension FocusMaskEngine {
               !objects.isEmpty else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
 
         let maxConfidence = objects.map(\.confidence).max() ?? 0
-        let label = Self.bestClassificationLabel(from: classifyRequest.results ?? [])
+        var label: String?
+        if classify {
+            let classifyRequest = VNClassifyImageRequest()
+            do {
+                try handler.perform([classifyRequest])
+                label = Self.bestClassificationLabel(from: classifyRequest.results ?? [])
+            } catch {
+                if !Task.isCancelled {
+                    visionLogger.error("Classification request failed: \(String(describing: error), privacy: .public)")
+                }
+            }
+        }
         var candidates = [SaliencyCandidate]()
         for object in objects {
             let candidate = SaliencyCandidate(normalizedRect: object.boundingBox, confidence: object.confidence)
@@ -802,7 +821,7 @@ extension FocusMaskEngine {
             // means the Vision saliency pass failed on a messy / low-contrast frame. The
             // landscape hint softens this via the reduced salientWeight override.
             let p = 1.0 - salientWeight
-            base = f * p * p * p
+            base = saliencyDetection.saliencyRequestFailed ? f : f * p * p * p
 
         case let (nil, s?):
             base = s

@@ -13,10 +13,7 @@ public struct SharpnessAnalysisDescriptor: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 1
 
     /// Scalar sharpness implementation revision.
-    ///
-    /// Version 4 preserves RawCull's established cache identity at the point
-    /// where ownership moved into PhotoAnalysisKit 1.1.0.
-    public static let currentAlgorithmVersion = 4
+    public static let currentAlgorithmVersion = 5
 
     /// Revision of the ISO-derived pre-blur scaling curve.
     public static let currentISOScalingPolicyVersion = 1
