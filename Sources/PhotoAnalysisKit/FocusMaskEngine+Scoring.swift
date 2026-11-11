@@ -683,10 +683,12 @@ extension FocusMaskEngine {
         var salientDetailScores: [CGRect: Float] = [:]
         for candidate in saliencyDetection.candidates {
             guard !Task.isCancelled else { return nil }
-            let analysis = analyzeRegion(candidate.normalizedRect)
-            salientAnalyses[candidate.normalizedRect] = analysis
+            let rect = candidate.normalizedRect
+            guard salientAnalyses[rect] == nil else { continue }
+            let analysis = analyzeRegion(rect)
+            salientAnalyses[rect] = analysis
             if analysis.samples.count >= 64 {
-                salientDetailScores[candidate.normalizedRect] = Self.robustTailScore(analysis.samples)
+                salientDetailScores[rect] = Self.robustTailScore(analysis.samples)
             }
         }
         let saliencySelection = Self.selectSaliencyCandidate(
