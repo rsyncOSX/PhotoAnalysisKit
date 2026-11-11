@@ -87,6 +87,7 @@ extension FocusMaskEngine {
 
         guard !Task.isCancelled, successfulImages >= minSamples, !energies.isEmpty else { return nil }
         energies.sort()
+        guard !Task.isCancelled else { return nil }
         func percentile(_ p: Float) -> Float {
             let index = Int((Float(energies.count - 1) * min(max(p, 0), 1)).rounded(.toNearestOrEven))
             return energies[index]

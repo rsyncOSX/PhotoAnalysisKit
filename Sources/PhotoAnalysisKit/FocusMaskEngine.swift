@@ -46,15 +46,17 @@ struct FocusMaskEngine: @unchecked Sendable {
         // The synchronous Core Image/Vision work must not inherit a caller's
         // UI isolation. An explicitly concurrent task provides that hop while
         // retaining task-local values and priority unlike `Task.detached`.
-        let worker = Task(priority: priority) { @concurrent in
-            operation()
+        let worker = Task<Success?, Never>(priority: priority) { @concurrent in
+            let result = operation()
+            return Task.isCancelled ? nil : result
         }
         return await withTaskCancellationHandler {
             guard !Task.isCancelled else {
                 worker.cancel()
                 return nil
             }
-            return await worker.value
+            let result = await worker.value
+            return Task.isCancelled ? nil : result
         } onCancel: {
             worker.cancel()
         }

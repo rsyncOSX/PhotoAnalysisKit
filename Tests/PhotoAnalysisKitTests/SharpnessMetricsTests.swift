@@ -188,6 +188,15 @@ struct SharpnessConfigurationTests {
         #expect(.from(aperture: aperture) == expected)
     }
 
+    @Test("A worker discards output produced after cancellation")
+    func workerCancellation() async {
+        let result = await FocusMaskEngine.runCancellableWorker {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return 42
+        }
+        #expect(result == nil)
+    }
+
     @Test("Aperture hints preserve blur-gate and weighting policy")
     func aperturePolicy() {
         let hints = [
