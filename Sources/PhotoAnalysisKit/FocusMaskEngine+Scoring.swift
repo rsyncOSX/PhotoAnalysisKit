@@ -816,12 +816,9 @@ extension FocusMaskEngine {
             base = blended
 
         case let (f?, nil):
-            // Full-frame score but no subject locus: cube-of-(1-salientWeight) penalizes
-            // heavily because for a wildlife-first app, "no detectable subject" usually
-            // means the Vision saliency pass failed on a messy / low-contrast frame. The
-            // landscape hint softens this via the reduced salientWeight override.
-            let p = 1.0 - salientWeight
-            base = saliencyDetection.saliencyRequestFailed ? f : f * p * p * p
+            // With a successful subject search, retain the frame contribution.
+            // On a Vision failure, use the available frame score as a fallback.
+            base = saliencyDetection.saliencyRequestFailed ? f : f * (1.0 - salientWeight)
 
         case let (nil, s?):
             base = s
