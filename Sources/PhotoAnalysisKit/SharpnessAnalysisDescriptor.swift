@@ -3,14 +3,14 @@ import Foundation
 /// Stable identity for non-mask sharpness analysis output produced by
 /// PhotoAnalysisKit.
 ///
-/// The descriptor deliberately excludes per-image values such as ISO and
-/// aperture because those belong to `PhotoAnalysisInput`. It also excludes
-/// focus-mask-only presentation settings. Hosts should add decoded-image size,
+/// The descriptor includes the configured ISO and aperture hint used when
+/// capture metadata is absent. Actual capture metadata belongs to
+/// `PhotoAnalysisInput`. The descriptor excludes focus-mask-only settings. Hosts should add decoded-image size,
 /// source selection, and source-file identity when constructing persisted cache
 /// keys.
 public struct SharpnessAnalysisDescriptor: Codable, Equatable, Sendable {
     /// Encoding shape for this descriptor.
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     /// Scalar sharpness implementation revision.
     public static let currentAlgorithmVersion = 6
@@ -26,6 +26,9 @@ public struct SharpnessAnalysisDescriptor: Codable, Equatable, Sendable {
     public let isoScalingPolicyVersion: Int
     public let apertureHintPolicyVersion: Int
 
+    /// Configured fallbacks. These fields are absent in schema version 1.
+    public let fallbackISO: Int?
+    public let fallbackApertureHint: SharpnessConfiguration.ApertureHint?
     public let preBlurRadius: Float
     public let borderInsetFraction: Float
     public let salientWeight: Float
@@ -50,6 +53,8 @@ public struct SharpnessAnalysisDescriptor: Codable, Equatable, Sendable {
         self.algorithmVersion = algorithmVersion
         self.isoScalingPolicyVersion = isoScalingPolicyVersion
         self.apertureHintPolicyVersion = apertureHintPolicyVersion
+        self.fallbackISO = configuration.iso
+        self.fallbackApertureHint = configuration.apertureHint
         self.preBlurRadius = configuration.preBlurRadius
         self.borderInsetFraction = configuration.borderInsetFraction
         self.salientWeight = configuration.salientWeight

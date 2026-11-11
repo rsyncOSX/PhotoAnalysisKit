@@ -91,6 +91,8 @@ struct SharpnessAnalysisDescriptorTests {
 }
 
 enum ScoringMutation: CaseIterable, Sendable {
+    case fallbackISO
+    case fallbackApertureHint
     case preBlurRadius
     case borderInsetFraction
     case salientWeight
@@ -105,6 +107,10 @@ enum ScoringMutation: CaseIterable, Sendable {
 
     func apply(to configuration: inout SharpnessConfiguration) {
         switch self {
+        case .fallbackISO:
+            configuration.iso += 100
+        case .fallbackApertureHint:
+            configuration.apertureHint = .landscape
         case .preBlurRadius:
             configuration.preBlurRadius += 0.1
         case .borderInsetFraction:

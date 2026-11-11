@@ -8,7 +8,7 @@ public struct SharpnessConfiguration: Sendable {
     /// Explicit nonisolated conformance — default-isolation=MainActor would otherwise
     /// make the synthesized Equatable.== main-isolated and unusable from the
     /// nonisolated scoring statics.
-    public enum ApertureHint: Equatable, Sendable {
+    public enum ApertureHint: String, Codable, Equatable, Sendable {
         case wide // ≤ f/5.6
         case mid // f/5.6–f/8
         case landscape // ≥ f/8

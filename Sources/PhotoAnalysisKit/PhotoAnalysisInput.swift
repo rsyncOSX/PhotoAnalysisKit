@@ -17,12 +17,29 @@ public struct PhotoAnalysisInput: Sendable {
 
     public init(
         image: CGImage,
-        iso: Int? = nil,
+        aperture: Double? = nil,
+        normalizedAFPoint: CGPoint? = nil
+    ) {
+        self.init(image: image, captureISO: nil, aperture: aperture, normalizedAFPoint: normalizedAFPoint)
+    }
+
+    public init(
+        image: CGImage,
+        iso: Int,
+        aperture: Double? = nil,
+        normalizedAFPoint: CGPoint? = nil
+    ) {
+        self.init(image: image, captureISO: max(1, iso), aperture: aperture, normalizedAFPoint: normalizedAFPoint)
+    }
+
+    private init(
+        image: CGImage,
+        captureISO: Int?,
         aperture: Double? = nil,
         normalizedAFPoint: CGPoint? = nil
     ) {
         self.image = image
-        self.captureISO = iso.map { max(1, $0) }
+        self.captureISO = captureISO
         self.iso = self.captureISO ?? 400
         self.aperture = aperture
         self.normalizedAFPoint = normalizedAFPoint
