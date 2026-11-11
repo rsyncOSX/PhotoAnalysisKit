@@ -232,6 +232,14 @@ struct SharpnessConfigurationTests {
         #expect(!landscape.isolateMaskToSubject)
     }
 
+    @Test("Mask gain participates in configuration equality")
+    func maskGainEquality() {
+        let baseline = SharpnessConfiguration()
+        var changed = baseline
+        changed.energyMultiplier += 1
+        #expect(baseline != changed)
+    }
+
     @Test("Quality levels increase fine-detail analysis")
     func quality() {
         let base = SharpnessConfiguration()
