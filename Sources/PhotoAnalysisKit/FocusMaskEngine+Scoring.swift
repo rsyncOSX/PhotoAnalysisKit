@@ -562,11 +562,7 @@ extension FocusMaskEngine {
     ) -> SharpnessAnalysis? {
         guard !Task.isCancelled else { return nil }
         guard let rawBoosted = buildScoringLaplacian(from: inputImage, config: config) else { return nil }
-        // The Gaussian pre-blur pads its output extent beyond the source image
-        // bounds. Crop back to the true image extent so every subsequent pixel
-        // width/height, border inset, and normalized AF/saliency rectangle is
-        // computed against the real photo bounds rather than the blur-expanded one.
-        let boosted = rawBoosted.cropped(to: inputImage.extent)
+        let boosted = rawBoosted
 
         let extent = boosted.extent
         let width = Int(extent.width)
@@ -905,14 +901,14 @@ extension FocusMaskEngine {
         let effectiveRadius = min(config.preBlurRadius * isoFactor * resFactor * blurDamp, 100.0)
 
         let preBlur = CIFilter.gaussianBlur()
-        preBlur.inputImage = nativeMask ? image.clampedToExtent() : image
+        preBlur.inputImage = image.clampedToExtent()
         preBlur.radius = effectiveRadius
         guard let smoothed = preBlur.outputImage else { return nil }
         guard !Task.isCancelled else { return nil }
 
         guard let kernel = _focusMagnitudeKernel else { return nil }
         guard let laplacianOutput = kernel.apply(
-            extent: nativeMask ? image.extent : smoothed.extent.insetBy(dx: 1, dy: 1),
+            extent: image.extent,
             roiCallback: { _, rect in rect.insetBy(dx: -2, dy: -2) },
             arguments: [smoothed],
         ) else { return nil }

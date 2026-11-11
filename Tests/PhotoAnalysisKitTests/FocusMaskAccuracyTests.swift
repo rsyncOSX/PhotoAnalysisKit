@@ -164,6 +164,20 @@ struct FocusMaskAccuracyTests {
         }
     }
 
+    @Test("A constant image has no AF detail at the frame edge")
+    func flatAFAtEdge() throws {
+        let extent = CGRect(x: 0, y: 0, width: 128, height: 128)
+        let image = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: extent)
+        let breakdown = try #require(FocusMaskEngine.computeSharpnessBreakdown(
+            from: image,
+            saliencyDetection: SaliencyDetection(candidates: [], saliencyInfo: nil),
+            afPoint: CGPoint(x: 0.03, y: 0.03),
+            context: FocusMaskEngine().context, config: SharpnessConfiguration()
+        ))
+        let afScore = try #require(breakdown.afPointScore)
+        #expect(afScore < 0.0001)
+    }
+
     @Test("Constant image has no artificial border evidence")
     func constantImage() throws {
         let extent = CGRect(x: 0, y: 0, width: 64, height: 64)
