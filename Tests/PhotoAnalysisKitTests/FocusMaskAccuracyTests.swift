@@ -164,6 +164,19 @@ struct FocusMaskAccuracyTests {
         }
     }
 
+    @Test("Frame inset is bounded before pixel conversion", arguments: [Float.nan, .infinity, -1, 0.75])
+    func invalidBorderInset(inset: Float) throws {
+        let image = try #require(makeCheckerboardImage())
+        var config = SharpnessConfiguration()
+        config.borderInsetFraction = inset
+        let result = FocusMaskEngine.computeSharpnessBreakdown(
+            from: CIImage(cgImage: image),
+            saliencyDetection: SaliencyDetection(candidates: [], saliencyInfo: nil),
+            afPoint: nil, context: FocusMaskEngine().context, config: config
+        )
+        #expect(result?.globalScore?.isFinite == true)
+    }
+
     @Test("A constant image has no AF detail at the frame edge")
     func flatAFAtEdge() throws {
         let extent = CGRect(x: 0, y: 0, width: 128, height: 128)

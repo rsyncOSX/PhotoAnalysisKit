@@ -587,8 +587,11 @@ extension FocusMaskEngine {
         }
 
         // Exclude outer border to avoid Gaussian edge artifacts
-        let borderCols = max(0, Int(Float(width) * config.borderInsetFraction))
-        let borderRows = max(0, Int(Float(height) * config.borderInsetFraction))
+        let inset = config.borderInsetFraction.isFinite
+            ? min(max(config.borderInsetFraction, 0), 0.10)
+            : SharpnessConfiguration().borderInsetFraction
+        let borderCols = Int(Float(width) * inset)
+        let borderRows = Int(Float(height) * inset)
         let innerW = max(0, width - 2 * borderCols)
         let innerH = max(0, height - 2 * borderRows)
 
