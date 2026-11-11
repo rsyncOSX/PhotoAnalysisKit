@@ -8,7 +8,8 @@ public struct FaceEvidence: Codable, Equatable, Sendable, Identifiable {
     /// Normalized rectangle with a visual top-left origin.
     public let normalizedBounds: CGRect
     /// Mean squared luminance gradient in the interior of the face.
-    /// Compare similar captures of the same face at compatible preview scales.
+    /// Compare similar captures of the same face using a consistent preview
+    /// size and resize policy. Resampling changes the detail available to measure.
     public let localDetail: Double?
 }
 

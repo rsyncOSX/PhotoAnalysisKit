@@ -12,6 +12,8 @@ public nonisolated enum AnimalCloseUpDetector {
         public let bounds: CGRect
     }
 
+    /// Locates close-ups in an upright preview. Minimum crop sizes are relative
+    /// to the preview's longest side so uniform resizing preserves geometry.
     public static func regions(in preview: CGImage) throws -> [Region] {
         try Task.checkCancellation()
         let request = VNDetectAnimalBodyPoseRequest()
@@ -40,7 +42,8 @@ public nonisolated enum AnimalCloseUpDetector {
         else { return [] }
 
         let span = max(maxX - minX, maxY - minY)
-        guard span >= 12 else { return [] }
+        let minimumSpan = max(imageBounds.width, imageBounds.height) * 0.012
+        guard span > 0, span >= minimumSpan else { return [] }
 
         func square(center: CGPoint, side: CGFloat) -> CGRect {
             CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side)
@@ -56,7 +59,7 @@ public nonisolated enum AnimalCloseUpDetector {
         let head = square(center: center, side: span * 1.25).intersection(imageBounds)
         let eyeRegions = eyes.compactMap { eye -> Region? in
             guard head.contains(eye) else { return nil }
-            let crop = square(center: eye, side: max(12, span * 0.35)).intersection(head)
+            let crop = square(center: eye, side: max(minimumSpan, span * 0.35)).intersection(head)
             return Region(kind: .eye, bounds: normalized(crop))
         }
         return [Region(kind: .head, bounds: normalized(head))] + eyeRegions

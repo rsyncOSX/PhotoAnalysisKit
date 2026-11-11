@@ -17,6 +17,23 @@ struct AnimalCloseUpRegionTests {
         #expect(regions[0].bounds.contains(regions[1].bounds))
     }
 
+    @Test("Uniform preview scaling preserves normalized close-up crops")
+    func previewScaling() throws {
+        func crops(at size: CGFloat) -> [AnimalCloseUpDetector.Region] {
+            let eye = CGPoint(x: size * 0.5, y: size * 0.5)
+            return AnimalCloseUpDetector.crops(
+                headPoints: [eye, CGPoint(x: eye.x + size * 0.025, y: eye.y)],
+                eyes: [eye],
+                in: CGRect(x: 0, y: 0, width: size, height: size)
+            )
+        }
+
+        let small = crops(at: 256)
+        let large = crops(at: 1024)
+        try #require(small.count == 2)
+        #expect(small.map(\.bounds) == large.map(\.bounds))
+    }
+
     @Test func `one landmark cannot establish a crop scale`() {
         let eye = CGPoint(x: 20, y: 20)
         #expect(AnimalCloseUpDetector.crops(
