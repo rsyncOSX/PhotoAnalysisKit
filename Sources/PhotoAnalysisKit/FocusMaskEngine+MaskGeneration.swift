@@ -461,25 +461,6 @@ extension FocusMaskEngine {
         return Float(covered) / Float(finite.count)
     }
 
-    nonisolated static func thresholdEnsuringVisibleEvidence(
-        _ samples: [Float],
-        threshold: Float,
-        minimumCoverage: Float,
-        enabled: Bool,
-    ) -> (threshold: Float, coverage: Float, relaxed: Bool) {
-        let coverage = maskCoverage(samples, threshold: threshold)
-        guard enabled, coverage < minimumCoverage else { return (threshold, coverage, false) }
-        let relaxed = adaptiveVisualThreshold(
-            samples,
-            fallback: threshold,
-            percentile: 0.70,
-            floorMultiplier: 0.16,
-            capAtFallback: true,
-        )
-        guard relaxed < threshold else { return (threshold, coverage, false) }
-        return (relaxed, maskCoverage(samples, threshold: relaxed), true)
-    }
-
     nonisolated static func selectEvidencePatches(
         from rankings: [FocusPatchRanking],
         visualRegion: FocusEvidenceRegion,
