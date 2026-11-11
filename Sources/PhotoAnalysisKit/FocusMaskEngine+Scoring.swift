@@ -48,16 +48,16 @@ extension FocusMaskEngine {
     /// pipeline always receives a predictable pixel format, regardless of the
     /// source JPEG's color space or bit depth.
     nonisolated static func normalizeToSRGB(_ image: CGImage) -> CGImage? {
-        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return image }
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         guard let ctx = CGContext(
             data: nil,
             width: image.width, height: image.height,
             bitsPerComponent: 8, bytesPerRow: 0,
             space: srgb, bitmapInfo: bitmapInfo.rawValue,
-        ) else { return image }
+        ) else { return nil }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        return ctx.makeImage() ?? image
+        return ctx.makeImage()
     }
 
     // MARK: - Saliency
