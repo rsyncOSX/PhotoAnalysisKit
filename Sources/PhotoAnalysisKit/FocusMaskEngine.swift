@@ -7,6 +7,8 @@ import Foundation
 /// that the engine has no mutable model/UI state; callers pass immutable config
 /// snapshots into every operation.
 struct FocusMaskEngine: @unchecked Sendable {
+    // Measure edge energy in encoded sRGB after input normalization. Changing
+    // to a linear working space would change the calibrated energy and scores.
     nonisolated let context = CIContext(options: [
         .workingColorSpace: NSNull(),
         .workingFormat: CIFormat.RGBAf
