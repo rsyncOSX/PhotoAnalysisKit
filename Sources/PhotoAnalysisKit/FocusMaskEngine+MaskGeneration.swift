@@ -24,8 +24,8 @@ extension FocusMaskEngine {
 
         let result: CGImage?? = await Self.runCancellableWorker { () -> CGImage? in
             guard !Task.isCancelled else { return nil }
-            let salientRegion: CGRect? = if let winningSaliencyRect = evidence?.winningSaliencyRect {
-                winningSaliencyRect
+            let salientRegion: CGRect? = if let evidence {
+                evidence.winningSaliencyRect
             } else if config.isolateMaskToSubject {
                 Self.selectSaliencyCandidate(
                     Self.detectSaliencyAndClassify(
