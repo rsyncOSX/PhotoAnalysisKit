@@ -54,11 +54,12 @@ public struct SharpnessConfiguration: Sendable {
     public var borderInsetFraction: Float = 0.04
 
     /// Weight given to the salient-region score vs the full-frame score.
-    /// 0 = full-frame only, 1 = subject region only.
+    /// 0 = full-frame only, 1 = subject region only. Finite values are clamped
+    /// to this range, and nonfinite values use the default weight.
     public var salientWeight: Float = 0.75
 
     /// Optional preset-level override for subject/full-frame blend weight.
-    /// Takes precedence over aperture-derived overrides when set.
+    /// Finite values take precedence over aperture-derived overrides.
     public var explicitSalientWeightOverride: Float?
 
     /// Bonus multiplier for subject size.
@@ -86,6 +87,14 @@ public struct SharpnessConfiguration: Sendable {
     public var apertureHint: ApertureHint = .mid
 
     public static let stableScoringEnergyMultiplier: Float = 7.62
+
+    nonisolated var effectiveSalientWeight: Float {
+        if let weight = explicitSalientWeightOverride, weight.isFinite {
+            return min(max(weight, 0), 1)
+        }
+        if let weight = apertureHint.salientWeightOverride { return weight }
+        return salientWeight.isFinite ? min(max(salientWeight, 0), 1) : Self().salientWeight
+    }
 
     public init() {}
 }

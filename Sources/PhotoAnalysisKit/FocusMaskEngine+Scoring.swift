@@ -791,7 +791,7 @@ extension FocusMaskEngine {
         // Landscape (deep DoF) pulls the salient weight down so the full-frame score
         // is not dominated by the Vision salient region on scenes where the whole
         // frame carries real in-focus detail.
-        let salientWeight = config.explicitSalientWeightOverride ?? hint.salientWeightOverride ?? config.salientWeight
+        let salientWeight = config.effectiveSalientWeight
 
         let base: Float?
         switch (fullScore, effectiveSubjectScore) {

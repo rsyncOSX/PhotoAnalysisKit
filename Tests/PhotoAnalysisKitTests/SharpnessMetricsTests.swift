@@ -240,6 +240,28 @@ struct SharpnessConfigurationTests {
         #expect(baseline != changed)
     }
 
+    @Test(
+        "Subject weights resolve to finite values within the blend range",
+        arguments: [
+            (Float(-1), Optional<Float>.none, SharpnessConfiguration.ApertureHint.mid, Float(0)),
+            (2, nil, .mid, 1),
+            (.infinity, nil, .mid, 0.75),
+            (0.4, -1, .landscape, 0),
+            (0.4, 2, .landscape, 1),
+            (0.4, .nan, .landscape, 0.55),
+            (0.4, .infinity, .mid, 0.4)
+        ]
+    )
+    func subjectWeight(
+        configured: Float, override: Float?, hint: SharpnessConfiguration.ApertureHint, expected: Float
+    ) {
+        var configuration = SharpnessConfiguration()
+        configuration.salientWeight = configured
+        configuration.explicitSalientWeightOverride = override
+        configuration.apertureHint = hint
+        #expect(configuration.effectiveSalientWeight == expected)
+    }
+
     @Test("Quality levels increase fine-detail analysis")
     func quality() {
         let base = SharpnessConfiguration()
