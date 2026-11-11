@@ -340,40 +340,9 @@ extension FocusMaskEngine {
         afRegionRadius: Float,
     ) -> FocusMaskRegionSelection {
         let unitBounds = CGRect(x: 0, y: 0, width: 1, height: 1)
-        let saliencyUnitRect: CGRect? = if let salientRegion, !salientRegion.isNull, !salientRegion.isEmpty {
-            salientRegion.intersection(unitBounds)
-        } else {
-            nil
-        }
-
-        let afUnitRect: CGRect? = {
-            guard let afPoint, afRegionRadius > 0 else { return nil }
-            let r = CGFloat(afRegionRadius)
-            let visionY = 1.0 - afPoint.y
-            let afRegion = CGRect(
-                x: afPoint.x - r,
-                y: visionY - r,
-                width: r * 2,
-                height: r * 2,
-            )
-            let intersection = afRegion.intersection(unitBounds)
-            return intersection.isNull || intersection.isEmpty ? nil : intersection
-        }()
-
-        func pixelRect(from unitRegion: CGRect?) -> CGRect? {
-            guard let unitRegion, !unitRegion.isNull, !unitRegion.isEmpty else { return nil }
-            let rect = CGRect(
-                x: extent.minX + unitRegion.minX * extent.width,
-                y: extent.minY + unitRegion.minY * extent.height,
-                width: unitRegion.width * extent.width,
-                height: unitRegion.height * extent.height,
-            ).integral.intersection(extent)
-            return rect.isNull || rect.isEmpty ? nil : rect
-        }
-
         return FocusMaskRegionSelection(
-            saliencyRect: pixelRect(from: saliencyUnitRect),
-            afRect: pixelRect(from: afUnitRect),
+            saliencyRect: pixelRect(from: salientRegion?.intersection(unitBounds), in: extent),
+            afRect: pixelRect(from: afUnitRegion(afPoint: afPoint, radius: afRegionRadius), in: extent),
         )
     }
 
@@ -773,15 +742,6 @@ extension FocusMaskEngine {
         blend.backgroundImage = clear
         blend.maskImage = mask
         return blend.outputImage?.cropped(to: extent)
-    }
-
-    private nonisolated static func pixelRect(fromNormalizedRect rect: CGRect, in extent: CGRect) -> CGRect {
-        CGRect(
-            x: extent.minX + rect.minX * extent.width,
-            y: extent.minY + (1.0 - rect.maxY) * extent.height,
-            width: rect.width * extent.width,
-            height: rect.height * extent.height,
-        ).integral.intersection(extent)
     }
 
     private nonisolated static func normalizedRect(_ rect: CGRect, in extent: CGRect) -> CGRect {
