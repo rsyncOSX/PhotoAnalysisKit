@@ -80,7 +80,18 @@ extension FocusMaskEngine {
               let objects = observation.salientObjects,
               !objects.isEmpty else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
 
-        let maxConfidence = objects.map(\.confidence).max() ?? 0
+        var candidates = [SaliencyCandidate]()
+        for object in objects {
+            let candidate = SaliencyCandidate(normalizedRect: object.boundingBox, confidence: object.confidence)
+            let area = candidate.normalizedRect.width * candidate.normalizedRect.height
+            if area > 0.03 || candidate.confidence >= 0.9 {
+                candidates.append(candidate)
+            }
+        }
+        candidates.sort { $0.confidence > $1.confidence }
+        guard let highestConfidence = candidates.first?.confidence else {
+            return SaliencyDetection(candidates: [], saliencyInfo: nil)
+        }
         var label: String?
         if classify {
             let classifyRequest = VNClassifyImageRequest()
@@ -93,18 +104,9 @@ extension FocusMaskEngine {
                 }
             }
         }
-        var candidates = [SaliencyCandidate]()
-        for object in objects {
-            let candidate = SaliencyCandidate(normalizedRect: object.boundingBox, confidence: object.confidence)
-            let area = candidate.normalizedRect.width * candidate.normalizedRect.height
-            if area > 0.03 || candidate.confidence >= 0.9 {
-                candidates.append(candidate)
-            }
-        }
-        candidates.sort { $0.confidence > $1.confidence }
         return SaliencyDetection(
             candidates: candidates,
-            saliencyInfo: candidates.isEmpty ? nil : SaliencySummary(subjectLabel: label, subjectConfidence: maxConfidence),
+            saliencyInfo: SaliencySummary(subjectLabel: label, subjectConfidence: highestConfidence),
         )
     }
 
