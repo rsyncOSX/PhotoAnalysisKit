@@ -147,6 +147,16 @@ struct SharpnessMetricsTests {
         #expect(SharpnessMetrics.isoScalingFactor(iso: 6_400) < 2)
     }
 
+    @Test("Motion blur requires measured frame and subject evidence")
+    func missingBlurEvidence() {
+        #expect(SharpnessMetrics.classifyFocusFailure(
+            globalScore: 0.03, subjectScore: nil, afPointScore: nil, blurGateSigma: 0
+        ) == .none)
+        #expect(SharpnessMetrics.classifyFocusFailure(
+            globalScore: nil, subjectScore: 0.03, afPointScore: nil, blurGateSigma: 0
+        ) == .none)
+    }
+
     @Test(
         "Failure classification distinguishes blur and missed focus",
         arguments: [

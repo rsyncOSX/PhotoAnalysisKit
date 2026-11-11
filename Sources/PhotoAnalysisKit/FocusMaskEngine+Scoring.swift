@@ -400,7 +400,7 @@ extension FocusMaskEngine {
         let afLocalPatchScore: Float?
         let subjectInteriorPatchScore: Float?
         let localDetailScore: Float?
-        let subjectMicro: Float
+        let subjectMicro: Float?
         let evidenceRegion: FocusEvidenceRegion
         let saliencySelection: SaliencySelection
     }
@@ -430,7 +430,7 @@ extension FocusMaskEngine {
             globalScore: analysis.fullScore,
             subjectScore: analysis.salientScore,
             afPointScore: analysis.afScore,
-            blurGateSigma: analysis.subjectMicro,
+            blurGateSigma: analysis.subjectMicro ?? 0,
             subjectLabel: saliencyDetection.saliencyInfo?.subjectLabel,
             subjectConfidence: saliencyDetection.saliencyInfo?.subjectConfidence,
             focusFailureKind: classifyFocusFailure(
@@ -477,14 +477,15 @@ extension FocusMaskEngine {
         globalScore: Float?,
         subjectScore: Float?,
         afPointScore: Float?,
-        blurGateSigma: Float,
+        blurGateSigma: Float?,
     ) -> FocusFailureKind {
         let subject = subjectScore ?? afPointScore
         let afOrSubject = afPointScore ?? subjectScore
 
-        if (globalScore ?? 0) < motionBlurScoreThreshold,
-           (subject ?? 0) < motionBlurScoreThreshold,
-           (afOrSubject ?? 0) < motionBlurScoreThreshold,
+        if let globalScore, let subject, let afOrSubject, let blurGateSigma,
+           globalScore < motionBlurScoreThreshold,
+           subject < motionBlurScoreThreshold,
+           afOrSubject < motionBlurScoreThreshold,
            blurGateSigma < motionBlurSigmaThreshold {
             return .motionBlur
         }
@@ -777,10 +778,12 @@ extension FocusMaskEngine {
         // above blurGateHigh → 1.0, linearly ramped in between. Replaces an earlier
         // hard σ<0.014 → ×0.12 cliff that false-positived on low-contrast subjects
         // (white bird against white sky, fog, plain-backdrop portraits).
-        let subjectMicro = effectiveAnalysis.map { Self.microContrast($0.samples) } ?? 0
+        let subjectMicro = effectiveAnalysis.flatMap { analysis in
+            analysis.samples.count >= 64 ? Self.microContrast(analysis.samples) : nil
+        }
         let hint = config.apertureHint
         let blurAttenuation: Float
-        if let ea = effectiveAnalysis, ea.samples.count >= 64 {
+        if let subjectMicro {
             let lo = hint.blurGateLow
             let hi = hint.blurGateHigh
             let span = max(hi - lo, 1e-6)
