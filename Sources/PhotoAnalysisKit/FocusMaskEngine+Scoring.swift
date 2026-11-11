@@ -381,8 +381,11 @@ extension FocusMaskEngine {
     ///      centered on the camera's AF point (if any).
     /// 4. Each set is reduced to a scalar via `robustTailScore` (p90–p97 band mean).
     /// 5. Blend:  `score = (1 − w)·full + w·subject`,  where
-    ///    `subject = 0.6·AF + 0.4·saliency` (whichever are present) and
-    ///    `w = config.explicitSalientWeightOverride ?? apertureHint override ?? config.salientWeight`.
+    ///    the broad subject score combines AF and saliency at 60/40 when both
+    ///    are present, or uses the available score alone. Local AF and subject
+    ///    patch detail can then adjust the broad subject score.
+    ///    The effective weight resolves the explicit override, aperture override,
+    ///    and configuration weight in that order.
     /// 6. Penalties/bonuses on top of the blend:
     ///    * silhouette penalty if >62 % of subject energy sits in its outer 12 % rim;
     ///    * subject-size bonus `(1 + area · subjectSizeFactor)` for saliency-only;
