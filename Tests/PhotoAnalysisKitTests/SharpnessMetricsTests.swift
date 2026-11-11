@@ -147,6 +147,12 @@ struct SharpnessMetricsTests {
         #expect(SharpnessMetrics.isoScalingFactor(iso: 6_400) < 2)
     }
 
+    @Test("Micro-contrast retains precision across a large sample region")
+    func largeRegionMicroContrast() {
+        let samples: [Float] = (0 ..< 2_000_000).map { $0.isMultiple(of: 2) ? 0.50 : 0.52 }
+        #expect(abs(SharpnessMetrics.microContrast(samples) - 0.01) < 0.000001)
+    }
+
     @Test("Motion blur requires measured frame and subject evidence")
     func missingBlurEvidence() {
         #expect(SharpnessMetrics.classifyFocusFailure(

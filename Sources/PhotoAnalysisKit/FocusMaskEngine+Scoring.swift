@@ -364,17 +364,19 @@ extension FocusMaskEngine {
     /// Near zero for blurry/smooth regions; higher for real textured detail.
     nonisolated static func microContrast(_ samples: [Float]) -> Float {
         guard !samples.isEmpty else { return 0 }
-        var sum: Float = 0
-        var sum2: Float = 0
-        var n: Float = 0
+        var sum: Double = 0
+        var sum2: Double = 0
+        var count = 0
         for v in samples where v.isFinite {
-            sum += v
-            sum2 += v * v
-            n += 1
+            let value = Double(v)
+            sum += value
+            sum2 += value * value
+            count += 1
         }
-        guard n > 1 else { return 0 }
+        guard count > 1 else { return 0 }
+        let n = Double(count)
         let mean = sum / n
-        return sqrt(max(0, (sum2 / n) - mean * mean))
+        return Float(sqrt(max(0, (sum2 / n) - mean * mean)))
     }
 
     // MARK: - Scalar scoring
