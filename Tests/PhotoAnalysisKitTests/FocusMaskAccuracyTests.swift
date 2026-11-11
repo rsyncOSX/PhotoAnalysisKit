@@ -88,6 +88,19 @@ struct FocusMaskAccuracyTests {
         #expect(flat < detail * 0.1)
     }
 
+    @Test("A frame without subject evidence retains its global score")
+    func frameOnlyScore() throws {
+        let image = try #require(makeCheckerboardImage())
+        let breakdown = try #require(FocusMaskEngine.computeSharpnessBreakdown(
+            from: CIImage(cgImage: image),
+            saliencyDetection: SaliencyDetection(candidates: [], saliencyInfo: nil),
+            afPoint: nil, context: FocusMaskEngine().context, config: .birdsInFlight
+        ))
+        let globalScore = try #require(breakdown.globalScore)
+        #expect(globalScore > 0)
+        #expect(breakdown.finalScore == globalScore)
+    }
+
     @Test("AF proximity cannot promote weak detail to high confidence")
     func weakAFConfidence() {
         let patch = FocusPatchRanking(

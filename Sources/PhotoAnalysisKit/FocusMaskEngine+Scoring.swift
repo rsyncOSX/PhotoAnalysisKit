@@ -72,7 +72,7 @@ extension FocusMaskEngine {
             if !Task.isCancelled {
                 visionLogger.error("Saliency request failed: \(String(describing: error), privacy: .public)")
             }
-            return SaliencyDetection(candidates: [], saliencyInfo: nil, saliencyRequestFailed: true)
+            return SaliencyDetection(candidates: [], saliencyInfo: nil)
         }
         guard !Task.isCancelled else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
 
@@ -826,9 +826,8 @@ extension FocusMaskEngine {
             base = blended
 
         case let (f?, nil):
-            // With a successful subject search, retain the frame contribution.
-            // On a Vision failure, use the available frame score as a fallback.
-            base = saliencyDetection.saliencyRequestFailed ? f : f * (1.0 - salientWeight)
+            // The frame is the only available measurement.
+            base = f
 
         case let (nil, s?):
             base = s
