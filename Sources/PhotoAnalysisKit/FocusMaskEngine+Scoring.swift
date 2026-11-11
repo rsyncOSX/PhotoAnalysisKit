@@ -8,11 +8,19 @@ import Vision
 private let visionLogger = Logger(subsystem: "PhotoAnalysisKit", category: "Vision")
 
 private nonisolated let _focusMagnitudeKernel: CIKernel? = {
-    guard let url = Bundle.module.url(forResource: "default", withExtension: "metallib"),
-          let data = try? Data(contentsOf: url)
-    else { return nil }
+    let logger = Logger(subsystem: "PhotoAnalysisKit", category: "Metal")
+    guard let url = Bundle.module.url(forResource: "default", withExtension: "metallib") else {
+        logger.error("Bundled default.metallib was not found")
+        return nil
+    }
 
-    return try? CIKernel(functionName: "focusLaplacian", fromMetalLibraryData: data)
+    do {
+        let data = try Data(contentsOf: url)
+        return try CIKernel(functionName: "focusLaplacian", fromMetalLibraryData: data)
+    } catch {
+        logger.error("Could not load focusLaplacian: \(String(describing: error), privacy: .public)")
+        return nil
+    }
 }()
 
 extension FocusMaskEngine {
