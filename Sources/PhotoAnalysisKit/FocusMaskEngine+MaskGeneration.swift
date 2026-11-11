@@ -503,17 +503,33 @@ extension FocusMaskEngine {
             }
         }
 
-        return rects.map {
-            patchRanking(
-                for: $0,
+        // Reuse one readback for overlapping patches when it fits the memory
+        // budget. Larger regions retain bounded per-patch readbacks.
+        let sampleBounds = boundedRegion.integral.intersection(sourceImage.extent)
+        let regionGrid: PatchSampleGrid? = if rects.count > 1,
+           sampleBounds.width * sampleBounds.height <= 1_048_576,
+           sampleBounds == sampleBounds.integral {
+            redSampleGrid(in: sampleBounds, from: sourceImage, context: context)
+        } else {
+            nil
+        }
+
+        var rankings = [FocusPatchRanking]()
+        rankings.reserveCapacity(rects.count)
+        for rect in rects {
+            guard !Task.isCancelled else { return [] }
+            rankings.append(patchRanking(
+                for: rect,
                 searchRegion: boundedRegion,
                 sourceImage: sourceImage,
                 extent: extent,
                 afPoint: afPoint,
                 visualRegion: visualRegion,
                 context: context,
-            )
+                regionGrid: regionGrid,
+            ))
         }
+        return rankings
     }
 
     nonisolated static func patchRanking(
@@ -525,7 +541,26 @@ extension FocusMaskEngine {
         visualRegion: FocusEvidenceRegion,
         context: CIContext,
     ) -> FocusPatchRanking {
-        let grid = redSampleGrid(in: rect, from: sourceImage, context: context)
+        patchRanking(
+            for: rect, searchRegion: searchRegion, sourceImage: sourceImage,
+            extent: extent, afPoint: afPoint, visualRegion: visualRegion,
+            context: context, regionGrid: nil,
+        )
+    }
+
+    private nonisolated static func patchRanking(
+        for rect: CGRect,
+        searchRegion: CGRect,
+        sourceImage: CIImage,
+        extent: CGRect,
+        afPoint: CGPoint?,
+        visualRegion: FocusEvidenceRegion,
+        context: CIContext,
+        regionGrid: PatchSampleGrid?,
+    ) -> FocusPatchRanking {
+        let bounds = rect.integral.intersection(sourceImage.extent)
+        let grid = regionGrid?.slice(in: bounds)
+            ?? redSampleGrid(in: rect, from: sourceImage, context: context)
         let samples = grid.samples
         let sortedSamples = sortedForOrderStatistics(samples)
         let robust = robustTailScore(samples, sortedSamples: sortedSamples) ?? 0
@@ -539,7 +574,10 @@ extension FocusMaskEngine {
         )
         let coverage = maskCoverage(samples, threshold: threshold)
         let inset = rect.insetBy(dx: rect.width * 0.18, dy: rect.height * 0.18)
-        let innerMean = sampleMean(redSamples(in: inset, from: sourceImage, context: context))
+        let innerBounds = inset.integral.intersection(sourceImage.extent)
+        let innerSamples = grid.slice(in: innerBounds)?.samples
+            ?? redSamples(in: inset, from: sourceImage, context: context)
+        let innerMean = sampleMean(innerSamples)
         let allMean = sampleMean(samples)
         let silhouette = max(0, min(1, (allMean - innerMean) / max(allMean, 1e-6)))
         let normalizedRect = normalizedRect(rect, in: extent)
@@ -770,8 +808,31 @@ extension FocusMaskEngine {
 
     private struct PatchSampleGrid {
         let samples: [Float]
+        let bounds: CGRect
         let width: Int
         let height: Int
+
+        static let empty = PatchSampleGrid(samples: [], bounds: .zero, width: 0, height: 0)
+
+        func slice(in rect: CGRect) -> PatchSampleGrid? {
+            guard width > 0, height > 0, !rect.isNull, !rect.isEmpty,
+                  bounds == bounds.integral, rect == rect.integral, bounds.contains(rect)
+            else { return nil }
+            if rect == bounds { return self }
+
+            let sliceWidth = Int(rect.width)
+            let sliceHeight = Int(rect.height)
+            let column = Int(rect.minX - bounds.minX)
+            // Core Image bitmap row zero is the visual top.
+            let firstRow = Int(bounds.maxY - rect.maxY)
+            var slice = [Float]()
+            slice.reserveCapacity(sliceWidth * sliceHeight)
+            for row in firstRow ..< (firstRow + sliceHeight) {
+                let start = row * width + column
+                slice.append(contentsOf: samples[start ..< (start + sliceWidth)])
+            }
+            return PatchSampleGrid(samples: slice, bounds: rect, width: sliceWidth, height: sliceHeight)
+        }
     }
 
     private struct PatchShapeEvidence {
@@ -868,11 +929,11 @@ extension FocusMaskEngine {
 
     private nonisolated static func redSampleGrid(in rect: CGRect, from image: CIImage, context: CIContext) -> PatchSampleGrid {
         let bounds = rect.integral.intersection(image.extent)
-        guard !bounds.isNull, !bounds.isEmpty else { return PatchSampleGrid(samples: [], width: 0, height: 0) }
+        guard !bounds.isNull, !bounds.isEmpty else { return .empty }
 
         let width = Int(bounds.width)
         let height = Int(bounds.height)
-        guard !Task.isCancelled, width > 0, height > 0 else { return PatchSampleGrid(samples: [], width: 0, height: 0) }
+        guard !Task.isCancelled, width > 0, height > 0 else { return .empty }
 
         var rgba = [Float](repeating: 0, count: width * height * 4)
         context.render(
@@ -883,12 +944,12 @@ extension FocusMaskEngine {
             format: .RGBAf,
             colorSpace: nil,
         )
-        guard !Task.isCancelled else { return PatchSampleGrid(samples: [], width: 0, height: 0) }
+        guard !Task.isCancelled else { return .empty }
         let samples = stride(from: 0, to: rgba.count, by: 4).map { idx in
             let value = rgba[idx]
             return value.isFinite ? value : 0
         }
-        return PatchSampleGrid(samples: samples, width: width, height: height)
+        return PatchSampleGrid(samples: samples, bounds: bounds, width: width, height: height)
     }
 
     private nonisolated static func centerWeightedLaplacian(

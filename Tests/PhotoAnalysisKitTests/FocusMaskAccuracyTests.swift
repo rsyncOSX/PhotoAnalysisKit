@@ -203,6 +203,27 @@ struct FocusMaskAccuracyTests {
         #expect(result?.globalScore?.isFinite == true)
     }
 
+    @Test("Shared patch readback matches a direct render on asymmetric detail")
+    func sharedPatchReadback() throws {
+        let tile = try #require(makeCheckerboardImage(size: 64))
+        let extent = CGRect(x: 0, y: 0, width: 128, height: 128)
+        let base = CIImage(color: .black).cropped(to: extent)
+        let image = CIImage(cgImage: tile).composited(over: base)
+        let context = FocusMaskEngine().context
+        let region = CGRect(x: 8, y: 12, width: 100, height: 100)
+        let patch = CGRect(x: 8, y: 12, width: 128 * 0.14, height: 128 * 0.14)
+        let shared = try #require(FocusMaskEngine.patchRankings(
+            in: region, sourceImage: image, extent: extent,
+            afPoint: nil, visualRegion: .global, context: context
+        ).first)
+        let direct = FocusMaskEngine.patchRanking(
+            for: patch, searchRegion: region, sourceImage: image, extent: extent,
+            afPoint: nil, visualRegion: .global, context: context
+        )
+        #expect(direct.robustTailScore > 0)
+        #expect(shared == direct)
+    }
+
     @Test("A constant image has no AF detail at the frame edge")
     func flatAFAtEdge() throws {
         let extent = CGRect(x: 0, y: 0, width: 128, height: 128)
