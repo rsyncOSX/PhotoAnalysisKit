@@ -29,9 +29,7 @@ public struct PhotoAnalyzer: @unchecked Sendable {
         _ input: PhotoAnalysisInput,
         configuration: SharpnessConfiguration = .birdsInFlight
     ) async -> PhotoAnalysisResult {
-        var resolved = configuration
-        resolved.iso = input.iso
-        resolved.apertureHint = .from(aperture: input.aperture)
+        let resolved = input.resolvingCaptureSettings(in: configuration)
 
         let output = await engine.computeSharpnessScore(
             from: input.image,
@@ -54,9 +52,7 @@ public struct PhotoAnalyzer: @unchecked Sendable {
         guard let normalizedImage = FocusMaskEngine.normalizeToSRGB(input.image) else {
             return PhotoAnalysisResult(saliency: nil, breakdown: nil, focusMask: nil)
         }
-        var resolved = configuration
-        resolved.iso = input.iso
-        resolved.apertureHint = .from(aperture: input.aperture)
+        let resolved = input.resolvingCaptureSettings(in: configuration)
 
         let output = await engine.generateFocusMaskWithBreakdown(
             from: normalizedImage,
@@ -82,9 +78,7 @@ public struct PhotoAnalyzer: @unchecked Sendable {
         guard let normalizedImage = FocusMaskEngine.normalizeToSRGB(input.image) else {
             return nil
         }
-        var resolved = configuration
-        resolved.iso = input.iso
-        resolved.apertureHint = .from(aperture: input.aperture)
+        let resolved = input.resolvingCaptureSettings(in: configuration)
         return await engine.generateFocusMask(
             from: normalizedImage,
             scale: scale,

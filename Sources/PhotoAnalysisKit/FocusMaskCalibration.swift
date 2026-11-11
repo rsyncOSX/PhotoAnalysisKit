@@ -47,10 +47,7 @@ extension FocusMaskEngine {
             func enqueue(_ input: PhotoAnalysisInput) {
                 group.addTask { [baseConfig, context] in
                     guard !Task.isCancelled else { return nil }
-                    var fileConfig = baseConfig
-                    fileConfig.iso = input.iso
-                    fileConfig.apertureHint = .from(aperture: input.aperture)
-                    fileConfig.enableSubjectClassification = false
+                    let fileConfig = input.resolvingCaptureSettings(in: baseConfig)
                     guard let normalizedImage = Self.normalizeToSRGB(input.image),
                           let laplacian = Self.buildFocusMaskDetail(
                         from: CIImage(cgImage: normalizedImage),

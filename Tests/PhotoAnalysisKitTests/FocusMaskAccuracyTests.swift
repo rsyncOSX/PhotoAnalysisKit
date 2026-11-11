@@ -88,6 +88,22 @@ struct FocusMaskAccuracyTests {
         #expect(flat < detail * 0.1)
     }
 
+    @Test("Capture metadata overrides configured ISO and aperture only when present")
+    func captureSettings() throws {
+        let image = try #require(makeCheckerboardImage())
+        var configuration = SharpnessConfiguration()
+        configuration.iso = 1600
+        configuration.apertureHint = .landscape
+
+        let missing = PhotoAnalysisInput(image: image).resolvingCaptureSettings(in: configuration)
+        #expect(missing.iso == 1600)
+        #expect(missing.apertureHint == .landscape)
+        let present = PhotoAnalysisInput(image: image, iso: 400, aperture: 4)
+            .resolvingCaptureSettings(in: configuration)
+        #expect(present.iso == 400)
+        #expect(present.apertureHint == .wide)
+    }
+
     @Test("A frame without subject evidence retains its global score")
     func frameOnlyScore() throws {
         let image = try #require(makeCheckerboardImage())

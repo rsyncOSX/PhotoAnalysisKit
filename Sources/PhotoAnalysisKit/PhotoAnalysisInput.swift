@@ -8,20 +8,33 @@ import Foundation
 /// the Vision coordinate conversion internally.
 public struct PhotoAnalysisInput: Sendable {
     public let image: CGImage
+    /// Capture ISO, or 400 when unavailable. Analysis uses its configured ISO
+    /// when the caller omits capture ISO.
     public let iso: Int
+    let captureISO: Int?
     public let aperture: Double?
     public let normalizedAFPoint: CGPoint?
 
     public init(
         image: CGImage,
-        iso: Int = 400,
+        iso: Int? = nil,
         aperture: Double? = nil,
         normalizedAFPoint: CGPoint? = nil
     ) {
         self.image = image
-        self.iso = max(1, iso)
+        self.captureISO = iso.map { max(1, $0) }
+        self.iso = self.captureISO ?? 400
         self.aperture = aperture
         self.normalizedAFPoint = normalizedAFPoint
+    }
+
+    func resolvingCaptureSettings(in configuration: SharpnessConfiguration) -> SharpnessConfiguration {
+        var resolved = configuration
+        resolved.iso = captureISO ?? configuration.iso
+        if let aperture, aperture.isFinite, aperture > 0 {
+            resolved.apertureHint = .from(aperture: aperture)
+        }
+        return resolved
     }
 }
 
