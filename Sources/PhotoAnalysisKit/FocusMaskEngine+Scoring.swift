@@ -228,8 +228,9 @@ extension FocusMaskEngine {
 
     /// p90–p97 band mean relative to the p20 noise floor, penalized when fewer
     /// than 6% of pixels land in the band (sparse edges → likely out-of-focus).
+    /// At least two samples are required to measure variation.
     nonisolated static func robustTailScore(_ samples: [Float]) -> Float? {
-        guard !samples.isEmpty else { return nil }
+        guard samples.count >= 2 else { return nil }
         guard samples.allSatisfy(\.isFinite) else {
             return robustTailScore(
                 samples,
@@ -255,10 +256,7 @@ extension FocusMaskEngine {
         _ samples: [Float],
         sortedSamples: [Float],
     ) -> Float? {
-        guard !samples.isEmpty, sortedSamples.count == samples.count else { return nil }
-        // Note: with n == 1, p20 == p90 == p97 == the single element.
-        // The p97 <= p90 branch fires and returns max(0, p90 - p20) == 0.0 (not nil).
-        // Callers cannot distinguish "single pixel that scored zero" from "empty" by the return alone.
+        guard samples.count >= 2, sortedSamples.count == samples.count else { return nil }
         let n = sortedSamples.count
 
         func p(_ frac: Float) -> Float {

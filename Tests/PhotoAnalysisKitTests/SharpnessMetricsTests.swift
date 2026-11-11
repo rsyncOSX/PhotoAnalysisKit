@@ -147,6 +147,12 @@ struct SharpnessMetricsTests {
         #expect(SharpnessMetrics.isoScalingFactor(iso: 6_400) < 2)
     }
 
+    @Test("A singleton cannot establish robust-tail variation")
+    func singletonRobustTail() {
+        #expect(SharpnessMetrics.robustTailScore([0.5]) == nil)
+        #expect(FocusMaskEngine.robustTailScore([0.5], sortedSamples: [0.5]) == nil)
+    }
+
     @Test("Micro-contrast retains precision across a large sample region")
     func largeRegionMicroContrast() {
         let samples: [Float] = (0 ..< 2_000_000).map { $0.isMultiple(of: 2) ? 0.50 : 0.52 }
