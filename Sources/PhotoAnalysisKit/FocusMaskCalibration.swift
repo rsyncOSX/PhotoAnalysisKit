@@ -3,6 +3,7 @@ import Foundation
 
 public struct FocusCalibrationResult: Equatable, Sendable {
     public let threshold: Float
+    /// Number of sampled pixel energies used to calculate the percentiles.
     public let sampleCount: Int
     public let p50: Float
     public let p90: Float
@@ -33,10 +34,10 @@ extension FocusMaskEngine {
         inputs: [PhotoAnalysisInput],
         baseConfig: SharpnessConfiguration,
         thresholdPercentile: Float = 0.90,
-        minSamples: Int = 5,
+        minimumSuccessfulImages: Int = 5,
         maxConcurrentTasks: Int = 8
     ) async -> FocusCalibrationResult? {
-        guard !inputs.isEmpty else { return nil }
+        guard !inputs.isEmpty, thresholdPercentile.isFinite else { return nil }
         let concurrency = max(1, min(maxConcurrentTasks, inputs.count))
         let context = self.context
         var nextIndex = 0
@@ -82,7 +83,7 @@ extension FocusMaskEngine {
             }
         }
 
-        guard !Task.isCancelled, successfulImages >= minSamples, !energies.isEmpty else { return nil }
+        guard !Task.isCancelled, successfulImages >= minimumSuccessfulImages, !energies.isEmpty else { return nil }
         energies.sort()
         guard !Task.isCancelled else { return nil }
         func percentile(_ p: Float) -> Float {

@@ -21,6 +21,16 @@ struct FocusMaskAccuracyTests {
         #expect(result == nil)
     }
 
+    @Test("Calibration rejects nonfinite percentiles", arguments: [Float.nan, .infinity, -.infinity])
+    func invalidCalibrationPercentile(percentile: Float) async throws {
+        let image = try #require(makeCheckerboardImage())
+        let result = await PhotoAnalyzer().calibrate(
+            from: [PhotoAnalysisInput(image: image)],
+            thresholdPercentile: percentile, minimumSuccessfulImages: 1
+        )
+        #expect(result == nil)
+    }
+
     @Test("Calibration responds to real detail loss", arguments: [128, 256])
     func blurredCalibration(size: Int) async throws {
         let image = try #require(makeCheckerboardImage(size: size))

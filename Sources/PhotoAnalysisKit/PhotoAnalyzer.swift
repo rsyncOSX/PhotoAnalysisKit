@@ -99,7 +99,7 @@ public struct PhotoAnalyzer: @unchecked Sendable {
             inputs: inputs,
             baseConfig: baseConfiguration,
             thresholdPercentile: thresholdPercentile,
-            minSamples: minimumSuccessfulImages,
+            minimumSuccessfulImages: minimumSuccessfulImages,
             maxConcurrentTasks: maximumConcurrentTasks
         )
     }
