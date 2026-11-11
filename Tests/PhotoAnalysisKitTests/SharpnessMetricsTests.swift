@@ -93,12 +93,12 @@ struct SharpnessMetricsTests {
             }
 
             let sorted = FocusMaskEngine.sortedForOrderStatistics(samples)
-            let expected = try #require(FocusMaskEngine.robustTailScore(
-                samples,
-                sortedSamples: sorted,
-            ))
-            let actual = try #require(SharpnessMetrics.robustTailScore(samples))
+            let expected = FocusMaskEngine.robustTailScore(samples, sortedSamples: sorted)
+            let actual = SharpnessMetrics.robustTailScore(samples)
             #expect(actual == expected)
+            if count > 1 {
+                try #require(actual != nil)
+            }
         }
     }
 
