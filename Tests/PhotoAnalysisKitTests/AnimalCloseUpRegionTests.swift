@@ -14,6 +14,8 @@ struct AnimalCloseUpRegionTests {
         try #require(regions.count == 2)
         #expect(regions[0].bounds.minX == 0)
         #expect(regions[1].bounds.minX == 0)
+        #expect(regions[1].bounds.width == regions[1].bounds.height)
+        #expect(regions[1].bounds.contains(CGPoint(x: 0.05, y: 0.25)))
         #expect(regions[0].bounds.contains(regions[1].bounds))
     }
 

@@ -24,13 +24,15 @@ public nonisolated enum AnimalCloseUpDetector {
         let height = CGFloat(preview.height)
         let imageBounds = CGRect(x: 0, y: 0, width: width, height: height)
         return try (request.results ?? []).flatMap { observation -> [Region] in
-            let points = try observation.recognizedPoints(.head).compactMapValues { point -> CGPoint? in
-                let location = point.location
-                guard point.confidence >= 0.5, (0...1).contains(location.x), (0...1).contains(location.y) else {
-                    return nil
+            let points = try observation.recognizedPoints(.head)
+                .filter { $0.key != .neck }
+                .compactMapValues { point -> CGPoint? in
+                    let location = point.location
+                    guard point.confidence >= 0.5, (0...1).contains(location.x), (0...1).contains(location.y) else {
+                        return nil
+                    }
+                    return CGPoint(x: location.x * width, y: (1 - location.y) * height)
                 }
-                return CGPoint(x: location.x * width, y: (1 - location.y) * height)
-            }
             let eyes = [VNAnimalBodyPoseObservation.JointName.leftEye, .rightEye].compactMap { points[$0] }
             return crops(headPoints: Array(points.values), eyes: eyes, in: imageBounds)
         }
@@ -59,8 +61,10 @@ public nonisolated enum AnimalCloseUpDetector {
         let head = square(center: center, side: span * 1.25).intersection(imageBounds)
         let eyeRegions = eyes.compactMap { eye -> Region? in
             guard head.contains(eye) else { return nil }
-            let crop = square(center: eye, side: max(minimumSpan, span * 0.35)).intersection(head)
-            return Region(kind: .eye, bounds: normalized(crop))
+            let side = min(max(minimumSpan, span * 0.35), head.width, head.height)
+            let x = min(max(eye.x - side / 2, head.minX), head.maxX - side)
+            let y = min(max(eye.y - side / 2, head.minY), head.maxY - side)
+            return Region(kind: .eye, bounds: normalized(CGRect(x: x, y: y, width: side, height: side)))
         }
         return [Region(kind: .head, bounds: normalized(head))] + eyeRegions
     }
