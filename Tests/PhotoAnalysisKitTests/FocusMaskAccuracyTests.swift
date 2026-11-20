@@ -48,6 +48,8 @@ struct FocusMaskAccuracyTests {
             from: [PhotoAnalysisInput(image: blurredImage)], minimumSuccessfulImages: 1
         ))
         #expect(sharpResult.p90 > blurredResult.p90)
+        // The result records the decode size the threshold was measured at.
+        #expect(sharpResult.measuredLongSide == max(image.width, image.height))
 
         var config = SharpnessConfiguration()
         config.threshold = sharpResult.threshold

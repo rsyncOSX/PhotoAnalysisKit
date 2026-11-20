@@ -9,6 +9,10 @@ public struct FocusCalibrationResult: Equatable, Sendable {
     public let p90: Float
     public let p95: Float
     public let p99: Float
+    /// Median long side, in pixels, of the images the energies were measured on.
+    /// Edge energy depends on decode size, so the threshold only fits masks drawn
+    /// from images near this size. Nil for results built without it.
+    public let measuredLongSide: Int?
 
     public init(
         threshold: Float,
@@ -16,7 +20,8 @@ public struct FocusCalibrationResult: Equatable, Sendable {
         p50: Float,
         p90: Float,
         p95: Float,
-        p99: Float
+        p99: Float,
+        measuredLongSide: Int? = nil
     ) {
         self.threshold = threshold
         self.sampleCount = sampleCount
@@ -24,6 +29,7 @@ public struct FocusCalibrationResult: Equatable, Sendable {
         self.p90 = p90
         self.p95 = p95
         self.p99 = p99
+        self.measuredLongSide = measuredLongSide
     }
 }
 
@@ -43,8 +49,9 @@ extension FocusMaskEngine {
         var nextIndex = 0
         var successfulImages = 0
         var energies = [Float]()
+        var longSides = [Int]()
 
-        await withTaskGroup(of: [Float]?.self) { group in
+        await withTaskGroup(of: (energies: [Float], longSide: Int)?.self) { group in
             func enqueue(_ input: PhotoAnalysisInput) {
                 group.addTask { [baseConfig, context] in
                     guard !Task.isCancelled else { return nil }
@@ -60,7 +67,10 @@ extension FocusMaskEngine {
                         .filter { $0.isFinite && $0 > 1e-6 }
                     guard !Task.isCancelled else { return nil }
                     let strideBy = max(samples.count / 4096, 1)
-                    return Swift.stride(from: 0, to: samples.count, by: strideBy).map { samples[$0] }
+                    return (
+                        Swift.stride(from: 0, to: samples.count, by: strideBy).map { samples[$0] },
+                        max(normalizedImage.width, normalizedImage.height)
+                    )
                 }
             }
             for _ in 0 ..< concurrency where nextIndex < inputs.count && !Task.isCancelled {
@@ -72,9 +82,10 @@ extension FocusMaskEngine {
                     group.cancelAll()
                     break
                 }
-                if let values, !values.isEmpty {
+                if let values, !values.energies.isEmpty {
                     successfulImages += 1
-                    energies.append(contentsOf: values)
+                    energies.append(contentsOf: values.energies)
+                    longSides.append(values.longSide)
                 }
                 if nextIndex < inputs.count, !Task.isCancelled {
                     enqueue(inputs[nextIndex])
@@ -97,6 +108,7 @@ extension FocusMaskEngine {
             p90: percentile(0.90),
             p95: percentile(0.95),
             p99: percentile(0.99),
+            measuredLongSide: longSides.sorted()[longSides.count / 2]
         )
     }
 }
