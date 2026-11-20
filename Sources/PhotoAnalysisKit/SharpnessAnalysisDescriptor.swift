@@ -13,7 +13,7 @@ public struct SharpnessAnalysisDescriptor: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 2
 
     /// Scalar sharpness implementation revision.
-    public static let currentAlgorithmVersion = 6
+    public static let currentAlgorithmVersion = 7
 
     /// Revision of the ISO-derived pre-blur scaling curve.
     public static let currentISOScalingPolicyVersion = 1

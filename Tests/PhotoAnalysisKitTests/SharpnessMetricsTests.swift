@@ -291,4 +291,19 @@ struct SharpnessConfigurationTests {
         #expect(SharpnessQuality.balanced.applying(to: base).fineDetailBlendWeight == 0.25)
         #expect(SharpnessQuality.highPrecision.applying(to: base).fineDetailBlendWeight == 0.45)
     }
+
+    @Test("Corner AF points are scored over a full-size region inside the frame")
+    func cornerAFScoringRegionKeepsFullArea() throws {
+        let radius: Float = 0.12
+        let center = try #require(FocusMaskEngine.afScoringRegion(afPoint: CGPoint(x: 0.5, y: 0.5), radius: radius))
+        for point in [CGPoint(x: 0.999, y: 0.999), CGPoint(x: 0.001, y: 0.001), CGPoint(x: 0.999, y: 0.2)] {
+            let region = try #require(FocusMaskEngine.afScoringRegion(afPoint: point, radius: radius))
+            #expect(abs(region.width - center.width) < 1e-9)
+            #expect(abs(region.height - center.height) < 1e-9)
+            #expect(CGRect(x: 0, y: 0, width: 1, height: 1).contains(region))
+            // The shifted region still covers the AF point (Vision y is flipped).
+            #expect(region.insetBy(dx: -1e-9, dy: -1e-9).contains(CGPoint(x: point.x, y: 1 - point.y)))
+        }
+        #expect(FocusMaskEngine.afScoringRegion(afPoint: nil, radius: radius) == nil)
+    }
 }

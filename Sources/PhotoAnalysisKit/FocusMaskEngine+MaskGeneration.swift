@@ -360,6 +360,19 @@ extension FocusMaskEngine {
         return region.isNull || region.isEmpty ? nil : region
     }
 
+    /// AF region for scoring: the full-size square around the AF point, shifted
+    /// inside the frame instead of clipped, so an AF point near an edge or corner
+    /// is measured over the same area as one in the middle.
+    nonisolated static func afScoringRegion(afPoint: CGPoint?, radius: Float) -> CGRect? {
+        guard let clipped = afUnitRegion(afPoint: afPoint, radius: radius), let afPoint else { return nil }
+        let side = CGFloat(radius) * 2
+        guard side < 1 else { return clipped }
+        let visionY = 1.0 - afPoint.y
+        let x = min(max(afPoint.x - CGFloat(radius), 0), 1 - side)
+        let y = min(max(visionY - CGFloat(radius), 0), 1 - side)
+        return CGRect(x: x, y: y, width: side, height: side)
+    }
+
     nonisolated static func pixelRect(from unitRegion: CGRect?, in extent: CGRect) -> CGRect? {
         guard let unitRegion, !unitRegion.isNull, !unitRegion.isEmpty else { return nil }
         let rect = CGRect(

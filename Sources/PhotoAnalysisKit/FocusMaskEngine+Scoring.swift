@@ -716,7 +716,12 @@ extension FocusMaskEngine {
         var afCenterScore: Float?
         var afNeighborhoodScore: Float?
         var afRegionUsed: CGRect?
-        if let afRegion = Self.afUnitRegion(afPoint: afPoint, radius: config.afRegionRadius) {
+        // Whether the frame is scored in "AF mode" depends only on a usable AF point,
+        // never on how many samples a frame-edge region happened to keep. Otherwise a
+        // corner AF point silently switches the frame to saliency-only blending plus
+        // the size bonus, and its score stops being comparable with the rest of the burst.
+        let hasUsableAFPoint = Self.afUnitRegion(afPoint: afPoint, radius: config.afRegionRadius) != nil
+        if let afRegion = Self.afScoringRegion(afPoint: afPoint, radius: config.afRegionRadius) {
             let a = analyzeRegion(afRegion)
             if a.samples.count >= 64 {
                 afScore = Self.robustTailScore(a.samples)
@@ -826,8 +831,9 @@ extension FocusMaskEngine {
 
             // Subject-size bonus only for Vision saliency (not AF): when the AF point is
             // present we already have a high-confidence subject locus, so the
-            // subject-area nudge would double-count.
-            if afRegionUsed == nil, let region = salientRegion {
+            // subject-area nudge would double-count. Keyed on the AF point itself so a
+            // clipped AF region cannot switch the bonus on.
+            if !hasUsableAFPoint, let region = salientRegion {
                 let area = Float(region.width * region.height)
                 blended *= 1.0 + area * config.subjectSizeFactor
             }
