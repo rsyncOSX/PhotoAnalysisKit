@@ -42,29 +42,33 @@ public actor VisionFeaturePrintBackend {
         self.revision = revision
     }
 
+    /// Runs through `VisionRequestGate.shared`, so feature prints from every
+    /// backend instance run one at a time.
     public func featurePrint(for image: CGImage) async throws -> VisionFeaturePrint {
         try Task.checkCancellation()
-        let request = VNGenerateImageFeaturePrintRequest()
-        request.revision = revision
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
-        do {
-            try handler.perform([request])
-        } catch {
-            throw VisionFeaturePrintError.generationFailed(String(describing: error))
+        let revision = revision
+        let payload = try await VisionRequestGate.shared.run {
+            let request = VNGenerateImageFeaturePrintRequest()
+            request.revision = revision
+            let handler = VNImageRequestHandler(cgImage: image, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                throw VisionFeaturePrintError.generationFailed(String(describing: error))
+            }
+            guard let observation = request.results?.first as? VNFeaturePrintObservation else {
+                throw VisionFeaturePrintError.missingObservation
+            }
+            do {
+                return try NSKeyedArchiver.archivedData(
+                    withRootObject: observation,
+                    requiringSecureCoding: true
+                )
+            } catch {
+                throw VisionFeaturePrintError.encodingFailed(String(describing: error))
+            }
         }
         try Task.checkCancellation()
-        guard let observation = request.results?.first as? VNFeaturePrintObservation else {
-            throw VisionFeaturePrintError.missingObservation
-        }
-        let payload: Data
-        do {
-            payload = try NSKeyedArchiver.archivedData(
-                withRootObject: observation,
-                requiringSecureCoding: true
-            )
-        } catch {
-            throw VisionFeaturePrintError.encodingFailed(String(describing: error))
-        }
         return VisionFeaturePrint(revision: revision, payload: payload)
     }
 

@@ -14,28 +14,33 @@ public nonisolated enum AnimalCloseUpDetector {
 
     /// Locates close-ups in an upright preview. Minimum crop sizes are relative
     /// to the preview's longest side so uniform resizing preserves geometry.
-    public static func regions(in preview: CGImage) throws -> [Region] {
+    ///
+    /// The Vision request runs through `VisionRequestGate.shared`.
+    public static func regions(in preview: CGImage) async throws -> [Region] {
         try Task.checkCancellation()
-        let request = VNDetectAnimalBodyPoseRequest()
-        try VNImageRequestHandler(cgImage: preview, orientation: .up).perform([request])
-        try Task.checkCancellation()
+        let regions = try await VisionRequestGate.shared.run {
+            let request = VNDetectAnimalBodyPoseRequest()
+            try VNImageRequestHandler(cgImage: preview, orientation: .up).perform([request])
 
-        let width = CGFloat(preview.width)
-        let height = CGFloat(preview.height)
-        let imageBounds = CGRect(x: 0, y: 0, width: width, height: height)
-        return try (request.results ?? []).flatMap { observation -> [Region] in
-            let points = try observation.recognizedPoints(.head)
-                .filter { $0.key != .neck }
-                .compactMapValues { point -> CGPoint? in
-                    let location = point.location
-                    guard point.confidence >= 0.5, (0...1).contains(location.x), (0...1).contains(location.y) else {
-                        return nil
+            let width = CGFloat(preview.width)
+            let height = CGFloat(preview.height)
+            let imageBounds = CGRect(x: 0, y: 0, width: width, height: height)
+            return try (request.results ?? []).flatMap { observation -> [Region] in
+                let points = try observation.recognizedPoints(.head)
+                    .filter { $0.key != .neck }
+                    .compactMapValues { point -> CGPoint? in
+                        let location = point.location
+                        guard point.confidence >= 0.5, (0...1).contains(location.x), (0...1).contains(location.y) else {
+                            return nil
+                        }
+                        return CGPoint(x: location.x * width, y: (1 - location.y) * height)
                     }
-                    return CGPoint(x: location.x * width, y: (1 - location.y) * height)
-                }
-            let eyes = [VNAnimalBodyPoseObservation.JointName.leftEye, .rightEye].compactMap { points[$0] }
-            return crops(headPoints: Array(points.values), eyes: eyes, in: imageBounds)
+                let eyes = [VNAnimalBodyPoseObservation.JointName.leftEye, .rightEye].compactMap { points[$0] }
+                return crops(headPoints: Array(points.values), eyes: eyes, in: imageBounds)
+            }
         }
+        try Task.checkCancellation()
+        return regions
     }
 
     static func crops(headPoints: [CGPoint], eyes: [CGPoint], in imageBounds: CGRect) -> [Region] {

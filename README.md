@@ -108,8 +108,11 @@ Apple Vision's animal body pose request.
 ```swift
 import PhotoAnalysisKit
 
-let regions = try AnimalCloseUpDetector.regions(in: uprightImage)
+let regions = try await AnimalCloseUpDetector.regions(in: uprightImage)
 ```
+
+Since 1.4.0 this call is `async`, because the Vision request runs through
+`VisionRequestGate` (see below).
 
 Each region has a `kind` of `.head` or `.eye` and a `bounds` rectangle in
 normalized image coordinates with the origin at the top left. Head bounds are
@@ -127,3 +130,34 @@ let distance = try backend.distance(from: left, to: right)
 
 Feature prints retain the Vision request revision and a representation version,
 so incompatible payloads are rejected before comparison.
+
+## Vision request gate
+
+Every Vision request in the package runs through `VisionRequestGate.shared`:
+saliency and classification, feature prints, face rectangles and animal body
+pose. The gate runs one request at a time across the process, on its own
+serial queue.
+
+`VNImageRequestHandler.perform(_:)` blocks its thread, and Vision needs a free
+thread from Swift concurrency's cooperative pool to finish. When too many
+requests run at once, every pool thread can end up blocked and the process
+stops making progress. With the gate, callers waiting for their turn suspend
+instead of holding a pool thread, and the Vision work runs outside the pool.
+
+Hosts that make their own Vision requests can share the same gate:
+
+```swift
+let labels = try await VisionRequestGate.shared.run {
+    let request = VNClassifyImageRequest()
+    try VNImageRequestHandler(cgImage: image).perform([request])
+    return (request.results ?? []).map(\.identifier)
+}
+```
+
+- The body builds the Vision request and handler itself and returns only
+  `Sendable` values. Vision types are not `Sendable`.
+- If the calling task is cancelled before its turn, `run` throws
+  `CancellationError` and the body is skipped. A body that has started runs to
+  the end.
+- Never call `run` from inside a body. The inner call waits for the outer one,
+  which never finishes.

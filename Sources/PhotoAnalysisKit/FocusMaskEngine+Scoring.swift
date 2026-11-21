@@ -29,17 +29,23 @@ extension FocusMaskEngine {
         config: SharpnessConfiguration,
         afPoint: CGPoint? = nil
     ) async -> (score: Float?, saliency: SaliencySummary?, breakdown: SharpnessBreakdown?) {
-        await Self.runCancellableWorker { [context] in
-            guard !Task.isCancelled else { return (nil, nil, nil) }
-            guard let normalizedImage = Self.normalizeToSRGB(cgImage) else {
-                return (nil, nil, nil)
-            }
+        // Three steps so no pool thread waits for Vision: normalize on a worker,
+        // await saliency through the Vision gate, then score on a worker.
+        let normalized: CGImage?? = await Self.runCancellableWorker {
+            guard !Task.isCancelled else { return nil }
+            return Self.normalizeToSRGB(cgImage)
+        }
+        guard let normalizedImage = normalized ?? nil, !Task.isCancelled else {
+            return (nil, nil, nil)
+        }
 
-            guard !Task.isCancelled else { return (nil, nil, nil) }
-            let saliency = Self.detectSaliencyAndClassify(
-                for: normalizedImage,
-                classify: config.enableSubjectClassification
-            )
+        let saliency = await Self.detectSaliencyAndClassify(
+            for: normalizedImage,
+            classify: config.enableSubjectClassification
+        )
+        guard !Task.isCancelled else { return (nil, nil, nil) }
+
+        return await Self.runCancellableWorker { [context] in
             guard !Task.isCancelled else { return (nil, nil, nil) }
             let breakdown = Self.computeSharpnessBreakdown(
                 from: CIImage(cgImage: normalizedImage),
@@ -70,19 +76,28 @@ extension FocusMaskEngine {
 
     // MARK: - Saliency
 
-    nonisolated static func detectSaliencyAndClassify(for cgImage: CGImage, classify: Bool) -> SaliencyDetection {
-        guard !Task.isCancelled else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
+    /// Runs saliency, and classification when asked, as one body of
+    /// `VisionRequestGate.shared`. Returns an empty detection when the caller
+    /// is cancelled before its turn or a Vision request fails.
+    nonisolated static func detectSaliencyAndClassify(for cgImage: CGImage, classify: Bool) async -> SaliencyDetection {
+        let empty = SaliencyDetection(candidates: [], saliencyInfo: nil)
+        guard !Task.isCancelled else { return empty }
+        let detection = try? await VisionRequestGate.shared.run {
+            performSaliencyAndClassify(for: cgImage, classify: classify)
+        }
+        return detection ?? empty
+    }
+
+    /// Runs inside a gate body. Must not call `VisionRequestGate.run`.
+    private nonisolated static func performSaliencyAndClassify(for cgImage: CGImage, classify: Bool) -> SaliencyDetection {
         let saliencyRequest = VNGenerateAttentionBasedSaliencyImageRequest()
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do {
             try handler.perform([saliencyRequest])
         } catch {
-            if !Task.isCancelled {
-                visionLogger.error("Saliency request failed: \(String(describing: error), privacy: .public)")
-            }
+            visionLogger.error("Saliency request failed: \(String(describing: error), privacy: .public)")
             return SaliencyDetection(candidates: [], saliencyInfo: nil)
         }
-        guard !Task.isCancelled else { return SaliencyDetection(candidates: [], saliencyInfo: nil) }
 
         guard let observation = saliencyRequest.results?.first,
               let objects = observation.salientObjects,
@@ -107,9 +122,7 @@ extension FocusMaskEngine {
                 try handler.perform([classifyRequest])
                 label = Self.bestClassificationLabel(from: classifyRequest.results ?? [])
             } catch {
-                if !Task.isCancelled {
-                    visionLogger.error("Classification request failed: \(String(describing: error), privacy: .public)")
-                }
+                visionLogger.error("Classification request failed: \(String(describing: error), privacy: .public)")
             }
         }
         return SaliencyDetection(

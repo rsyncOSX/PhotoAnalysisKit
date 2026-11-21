@@ -31,17 +31,15 @@ public actor FaceEvidenceAnalyzer {
 
     /// Returns an empty list for a successful scan with no faces.
     /// Vision and cancellation failures propagate to the caller.
-    public func analyze(_ uprightPreview: CGImage) throws -> FaceEvidenceResult {
+    /// The full-image pass and any tile passes run together as one body of
+    /// `VisionRequestGate.shared`. Detail measurement runs outside the gate.
+    public func analyze(_ uprightPreview: CGImage) async throws -> FaceEvidenceResult {
         try Task.checkCancellation()
-        let request = VNDetectFaceRectanglesRequest()
-        request.revision = Self.detectorRevision
-        try VNImageRequestHandler(cgImage: uprightPreview, orientation: .up).perform([request])
-        var boxes = (request.results ?? []).compactMap {
-            Self.topLeftBounds(fromVision: $0.boundingBox)
+        let detection = try await VisionRequestGate.shared.run {
+            try Self.detectFaces(in: uprightPreview)
         }
-        if boxes.allSatisfy({ max($0.width, $0.height) < 0.10 }) {
-            try Self.findSmallFaces(in: uprightPreview, revision: request.revision, addingTo: &boxes)
-        }
+        try Task.checkCancellation()
+        var boxes = detection.boxes
         boxes.sort {
             [$0.minY, $0.minX, $0.width, $0.height]
                 .lexicographicallyPrecedes([$1.minY, $1.minX, $1.width, $1.height])
@@ -59,14 +57,33 @@ public actor FaceEvidenceAnalyzer {
         try Task.checkCancellation()
         return FaceEvidenceResult(
             algorithmVersion: Self.algorithmVersion,
-            detectorRevision: request.revision,
+            detectorRevision: detection.revision,
             previewWidth: uprightPreview.width,
             previewHeight: uprightPreview.height,
             faces: faces
         )
     }
 
-    private static func findSmallFaces(in preview: CGImage, revision: Int, addingTo boxes: inout [CGRect]) throws {
+    private struct FaceDetection: Sendable {
+        let boxes: [CGRect]
+        let revision: Int
+    }
+
+    /// Runs inside a gate body. Must not call `VisionRequestGate.run`.
+    private nonisolated static func detectFaces(in preview: CGImage) throws -> FaceDetection {
+        let request = VNDetectFaceRectanglesRequest()
+        request.revision = detectorRevision
+        try VNImageRequestHandler(cgImage: preview, orientation: .up).perform([request])
+        var boxes = (request.results ?? []).compactMap {
+            topLeftBounds(fromVision: $0.boundingBox)
+        }
+        if boxes.allSatisfy({ max($0.width, $0.height) < 0.10 }) {
+            try findSmallFaces(in: preview, revision: request.revision, addingTo: &boxes)
+        }
+        return FaceDetection(boxes: boxes, revision: request.revision)
+    }
+
+    private nonisolated static func findSmallFaces(in preview: CGImage, revision: Int, addingTo boxes: inout [CGRect]) throws {
         let width = CGFloat(preview.width)
         let height = CGFloat(preview.height)
         guard max(width, height) >= 1024 else { return }
@@ -74,7 +91,6 @@ public actor FaceEvidenceAnalyzer {
         // Overlap tiles so a face split by one boundary is visible in another tile.
         for y in [0.0, 0.4] {
             for x in [0.0, 0.4] {
-                try Task.checkCancellation()
                 let rect = CGRect(x: x * width, y: y * height,
                                   width: 0.6 * width, height: 0.6 * height).integral.intersection(imageBounds)
                 guard let tile = preview.cropping(to: rect) else { continue }

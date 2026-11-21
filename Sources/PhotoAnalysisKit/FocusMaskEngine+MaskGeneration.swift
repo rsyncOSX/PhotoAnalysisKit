@@ -22,21 +22,25 @@ extension FocusMaskEngine {
     ) async -> CGImage? {
         let context = self.context
 
+        guard !Task.isCancelled else { return nil }
+        // Saliency runs through the Vision gate before the worker starts, so no
+        // pool thread waits for Vision.
+        let salientRegion: CGRect? = if let evidence {
+            evidence.winningSaliencyRect
+        } else if config.isolateMaskToSubject {
+            await Self.selectSaliencyCandidate(
+                Self.detectSaliencyAndClassify(
+                    for: cgImage,
+                    classify: false,
+                ).candidates,
+                afPoint: afPoint,
+            ).winningRegion
+        } else {
+            nil
+        }
+        guard !Task.isCancelled else { return nil }
+
         let result: CGImage?? = await Self.runCancellableWorker { () -> CGImage? in
-            guard !Task.isCancelled else { return nil }
-            let salientRegion: CGRect? = if let evidence {
-                evidence.winningSaliencyRect
-            } else if config.isolateMaskToSubject {
-                Self.selectSaliencyCandidate(
-                    Self.detectSaliencyAndClassify(
-                        for: cgImage,
-                        classify: false,
-                    ).candidates,
-                    afPoint: afPoint,
-                ).winningRegion
-            } else {
-                nil
-            }
             guard !Task.isCancelled else { return nil }
             return Self.buildFocusMask(
                 from: CIImage(cgImage: cgImage),
@@ -62,14 +66,18 @@ extension FocusMaskEngine {
     ) async -> (mask: CGImage?, saliency: SaliencySummary?, breakdown: SharpnessBreakdown?) {
         let context = self.context
 
+        guard !Task.isCancelled else { return (nil, nil, nil) }
+        // Saliency runs through the Vision gate before the worker starts, so no
+        // pool thread waits for Vision.
+        let saliency = await Self.detectSaliencyAndClassify(
+            for: cgImage,
+            classify: config.enableSubjectClassification,
+        )
+        guard !Task.isCancelled else { return (nil, nil, nil) }
+
         return await Self.runCancellableWorker {
             guard !Task.isCancelled else { return (nil, nil, nil) }
             let ciImage = CIImage(cgImage: cgImage)
-            let saliency = Self.detectSaliencyAndClassify(
-                for: cgImage,
-                classify: config.enableSubjectClassification,
-            )
-            guard !Task.isCancelled else { return (nil, nil, nil) }
             var breakdown = Self.computeSharpnessBreakdown(
                 from: ciImage,
                 saliencyDetection: saliency,
