@@ -9,10 +9,19 @@ import Foundation
 struct FocusMaskEngine: @unchecked Sendable {
     // Measure edge energy in encoded sRGB after input normalization. Changing
     // to a linear working space would change the calibrated energy and scores.
-    nonisolated let context = CIContext(options: [
+    //
+    // One context for every engine, created on first use. Creating a CIContext
+    // is expensive and goes through Metal's shared shader-cache database, so
+    // creating one per engine made every `PhotoAnalyzer()` (often on the main
+    // thread) wait on that database. CIContext is thread-safe to share.
+    nonisolated static let sharedContext = CIContext(options: [
         .workingColorSpace: NSNull(),
         .workingFormat: CIFormat.RGBAf
     ])
+
+    nonisolated var context: CIContext {
+        Self.sharedContext
+    }
 
     struct FocusMaskDiagnostics: Equatable {
         let regionSource: FocusMaskRegionSource
